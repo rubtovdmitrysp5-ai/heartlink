@@ -4,7 +4,7 @@ struct RootTabsView: View {
     let currentUser: UserProfile
 
     @State private var selectedTab: AppTab = .home
-    @State private var tabRouter = TabRouter()
+    @StateObject private var tabRouter = TabRouter()
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -17,7 +17,7 @@ struct RootTabsView: View {
                             set: { tabRouter.router(for: tab).presentedSheet = $0 }
                         ))
                 }
-                .environment(tabRouter.router(for: tab))
+                .environmentObject(tabRouter.router(for: tab))
                 .tabItem { tab.label }
                 .tag(tab)
             }
@@ -53,4 +53,3 @@ private extension View {
         }
     }
 }
-

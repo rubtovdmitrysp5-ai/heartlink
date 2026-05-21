@@ -21,11 +21,18 @@ jobs:
 
       - name: Build app
         run: |
+          set -o pipefail
           xcodebuild \
             -project HeartLink.xcodeproj \
             -scheme HeartLink \
             -destination 'generic/platform=iOS Simulator' \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            build 2>&1 | tee xcodebuild.log
 
+      - name: Upload xcodebuild log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log

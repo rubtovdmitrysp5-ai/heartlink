@@ -1,12 +1,11 @@
 import Foundation
-import Observation
+import Combine
 import FirebaseAuth
 import FirebaseFirestore
 
 @MainActor
-@Observable
-final class AuthenticationService {
-    private(set) var state: AuthenticationState = .checking
+final class AuthenticationService: ObservableObject {
+    @Published private(set) var state: AuthenticationState = .checking
     private(set) var isFirebaseEnabled: Bool
     private var authHandle: AuthStateDidChangeListenerHandle?
 

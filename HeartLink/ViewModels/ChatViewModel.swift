@@ -1,12 +1,11 @@
 import Foundation
-import Observation
+import Combine
 import PhotosUI
 
 @MainActor
-@Observable
-final class ChatViewModel {
-    var draft = ""
-    var selectedReactionMessageId: String?
+final class ChatViewModel: ObservableObject {
+    @Published var draft = ""
+    @Published var selectedReactionMessageId: String?
 
     func send(using service: FirestoreService, coupleId: String, authorId: String) async {
         let text = draft

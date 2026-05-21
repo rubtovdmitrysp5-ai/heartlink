@@ -3,21 +3,20 @@ import SwiftUI
 @main
 struct HeartLinkApp: App {
     @UIApplicationDelegateAdaptor(HeartLinkAppDelegate.self) private var appDelegate
-    @State private var container = AppContainer()
+    @StateObject private var container = AppContainer()
 
     var body: some Scene {
         WindowGroup {
             AppView()
-                .environment(container)
-                .environment(container.authenticationService)
-                .environment(container.firestoreService)
-                .environment(container.storageService)
-                .environment(container.notificationService)
-                .environment(container.securityService)
+                .environmentObject(container)
+                .environmentObject(container.authenticationService)
+                .environmentObject(container.firestoreService)
+                .environmentObject(container.storageService)
+                .environmentObject(container.notificationService)
+                .environmentObject(container.securityService)
                 .task {
                     container.start()
                 }
         }
     }
 }
-

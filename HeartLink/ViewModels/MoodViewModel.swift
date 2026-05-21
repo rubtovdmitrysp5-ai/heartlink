@@ -1,10 +1,9 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class MoodViewModel {
-    var selectedMood: MoodStatus = .happy
+final class MoodViewModel: ObservableObject {
+    @Published var selectedMood: MoodStatus = .happy
 
     func updateMood(_ mood: MoodStatus, user: UserProfile, service: FirestoreService) async {
         selectedMood = mood

@@ -1,9 +1,8 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class AppContainer {
+final class AppContainer: ObservableObject {
     let isFirebaseEnabled: Bool
     let authenticationService: AuthenticationService
     let firestoreService: FirestoreService

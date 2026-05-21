@@ -1,19 +1,18 @@
 import Foundation
-import Observation
+import Combine
 import FirebaseFirestore
 
 @MainActor
-@Observable
-final class FirestoreService {
+final class FirestoreService: ObservableObject {
     private let isFirebaseEnabled: Bool
     private var listeners: [ListenerRegistration] = []
 
-    var couple: Couple = SampleDataStore.couple
-    var partner: UserProfile = SampleDataStore.partner
-    var messages: [ChatMessage] = SampleDataStore.messages
-    var memories: [Memory] = SampleDataStore.memories
-    var goals: [CoupleGoal] = SampleDataStore.goals
-    var games: [LoveGame] = SampleDataStore.games
+    @Published var couple: Couple = SampleDataStore.couple
+    @Published var partner: UserProfile = SampleDataStore.partner
+    @Published var messages: [ChatMessage] = SampleDataStore.messages
+    @Published var memories: [Memory] = SampleDataStore.memories
+    @Published var goals: [CoupleGoal] = SampleDataStore.goals
+    @Published var games: [LoveGame] = SampleDataStore.games
 
     init(isFirebaseEnabled: Bool) {
         self.isFirebaseEnabled = isFirebaseEnabled

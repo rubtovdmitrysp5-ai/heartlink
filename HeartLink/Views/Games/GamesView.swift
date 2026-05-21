@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct GamesView: View {
-    @Environment(FirestoreService.self) private var firestoreService
-    @Environment(RouterPath.self) private var router
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var router: RouterPath
 
     var body: some View {
         ZStack {
@@ -96,8 +96,8 @@ private struct GameCard: View {
 struct GameDetailView: View {
     let gameId: String
 
-    @Environment(FirestoreService.self) private var firestoreService
-    @State private var viewModel = GamesViewModel()
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @StateObject private var viewModel = GamesViewModel()
 
     private var game: LoveGame? {
         firestoreService.games.first { $0.id == gameId }
@@ -171,8 +171,7 @@ struct GameDetailView: View {
 #Preview {
     NavigationStack {
         GamesView()
-            .environment(FirestoreService(isFirebaseEnabled: false))
-            .environment(RouterPath())
+            .environmentObject(FirestoreService(isFirebaseEnabled: false))
+            .environmentObject(RouterPath())
     }
 }
-

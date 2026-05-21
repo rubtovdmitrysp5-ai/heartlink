@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SecurityLockView: View {
-    @Environment(SecurityService.self) private var securityService
+    @EnvironmentObject private var securityService: SecurityService
     @State private var enteredPasscode = ""
 
     var body: some View {
@@ -65,7 +65,7 @@ struct SecurityLockView: View {
 
 struct SecuritySettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(SecurityService.self) private var securityService
+    @EnvironmentObject private var securityService: SecurityService
     @State private var passcode = ""
 
     var body: some View {
@@ -111,6 +111,5 @@ struct SecuritySettingsView: View {
 
 #Preview {
     SecurityLockView()
-        .environment(SecurityService())
+        .environmentObject(SecurityService())
 }
-

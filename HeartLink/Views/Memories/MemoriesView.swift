@@ -4,8 +4,8 @@ import SwiftUI
 struct MemoriesView: View {
     let currentUser: UserProfile
 
-    @Environment(FirestoreService.self) private var firestoreService
-    @Environment(RouterPath.self) private var router
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var router: RouterPath
 
     var body: some View {
         ZStack {
@@ -114,7 +114,7 @@ private struct MemoryTimelineCard: View {
 
 struct MemoryDetailView: View {
     let memoryId: String
-    @Environment(FirestoreService.self) private var firestoreService
+    @EnvironmentObject private var firestoreService: FirestoreService
 
     private var memory: Memory? {
         firestoreService.memories.first { $0.id == memoryId }
@@ -203,10 +203,10 @@ private struct MemoryHeroImage: View {
 
 struct AddMemoryView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AuthenticationService.self) private var authenticationService
-    @Environment(FirestoreService.self) private var firestoreService
-    @Environment(StorageService.self) private var storageService
-    @State private var viewModel = MemoriesViewModel()
+    @EnvironmentObject private var authenticationService: AuthenticationService
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var storageService: StorageService
+    @StateObject private var viewModel = MemoriesViewModel()
 
     private var userId: String {
         if case .signedIn(let user) = authenticationService.state {
@@ -283,9 +283,9 @@ private extension View {
 #Preview {
     NavigationStack {
         MemoriesView(currentUser: .sample)
-            .environment(FirestoreService(isFirebaseEnabled: false))
-            .environment(StorageService(isFirebaseEnabled: false))
-            .environment(RouterPath())
-            .environment(AuthenticationService(isFirebaseEnabled: false))
+            .environmentObject(FirestoreService(isFirebaseEnabled: false))
+            .environmentObject(StorageService(isFirebaseEnabled: false))
+            .environmentObject(RouterPath())
+            .environmentObject(AuthenticationService(isFirebaseEnabled: false))
     }
 }

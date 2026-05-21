@@ -1,10 +1,9 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class HomeViewModel {
-    var animatedDays = 0
+final class HomeViewModel: ObservableObject {
+    @Published var animatedDays = 0
 
     func animateCounter(to value: Int) async {
         animatedDays = 0

@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct AppView: View {
-    @Environment(AppContainer.self) private var container
-    @Environment(AuthenticationService.self) private var authenticationService
-    @Environment(SecurityService.self) private var securityService
+    @EnvironmentObject private var container: AppContainer
+    @EnvironmentObject private var authenticationService: AuthenticationService
+    @EnvironmentObject private var securityService: SecurityService
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
@@ -64,10 +64,10 @@ private struct SplashLoadingView: View {
 
 #Preview {
     AppView()
-        .environment(AppContainer())
-        .environment(AuthenticationService(isFirebaseEnabled: false))
-        .environment(FirestoreService(isFirebaseEnabled: false))
-        .environment(StorageService(isFirebaseEnabled: false))
-        .environment(NotificationService(isFirebaseEnabled: false))
-        .environment(SecurityService())
+        .environmentObject(AppContainer())
+        .environmentObject(AuthenticationService(isFirebaseEnabled: false))
+        .environmentObject(FirestoreService(isFirebaseEnabled: false))
+        .environmentObject(StorageService(isFirebaseEnabled: false))
+        .environmentObject(NotificationService(isFirebaseEnabled: false))
+        .environmentObject(SecurityService())
 }

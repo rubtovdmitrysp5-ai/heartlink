@@ -1,15 +1,14 @@
 import Foundation
-import Observation
+import Combine
 import FirebaseMessaging
 import UserNotifications
 import UIKit
 
 @MainActor
-@Observable
-final class NotificationService: NSObject, UNUserNotificationCenterDelegate, MessagingDelegate {
+final class NotificationService: NSObject, ObservableObject, UNUserNotificationCenterDelegate, MessagingDelegate {
     private let isFirebaseEnabled: Bool
-    private(set) var permissionGranted = false
-    private(set) var fcmToken: String?
+    @Published private(set) var permissionGranted = false
+    @Published private(set) var fcmToken: String?
 
     init(isFirebaseEnabled: Bool) {
         self.isFirebaseEnabled = isFirebaseEnabled

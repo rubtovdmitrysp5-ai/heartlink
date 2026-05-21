@@ -1,11 +1,10 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class GamesViewModel {
-    var selectedAnswer: String?
-    var dailyAnswer = ""
+final class GamesViewModel: ObservableObject {
+    @Published var selectedAnswer: String?
+    @Published var dailyAnswer = ""
 
     func clear() {
         selectedAnswer = nil

@@ -1,15 +1,14 @@
 import Foundation
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class AuthenticationViewModel {
-    var name = ""
-    var email = ""
-    var password = ""
-    var isCreatingAccount = false
-    var isLoading = false
-    var errorMessage: String?
+final class AuthenticationViewModel: ObservableObject {
+    @Published var name = ""
+    @Published var email = ""
+    @Published var password = ""
+    @Published var isCreatingAccount = false
+    @Published var isLoading = false
+    @Published var errorMessage: String?
 
     func submit(using service: AuthenticationService) async {
         isLoading = true

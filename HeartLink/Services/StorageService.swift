@@ -1,12 +1,11 @@
 import Foundation
-import Observation
+import Combine
 import FirebaseStorage
 import PhotosUI
 import SwiftUI
 
 @MainActor
-@Observable
-final class StorageService {
+final class StorageService: ObservableObject {
     private let isFirebaseEnabled: Bool
 
     init(isFirebaseEnabled: Bool) {

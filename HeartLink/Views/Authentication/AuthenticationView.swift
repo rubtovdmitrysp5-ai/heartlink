@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct AuthenticationView: View {
-    @Environment(AuthenticationService.self) private var authenticationService
-    @State private var viewModel = AuthenticationViewModel()
+    @EnvironmentObject private var authenticationService: AuthenticationService
+    @StateObject private var viewModel = AuthenticationViewModel()
 
     var body: some View {
         ZStack {
@@ -93,7 +93,6 @@ private extension View {
 }
 
 #Preview {
-    AuthenticationView()
-        .environment(AuthenticationService(isFirebaseEnabled: false))
+        AuthenticationView()
+        .environmentObject(AuthenticationService(isFirebaseEnabled: false))
 }
-

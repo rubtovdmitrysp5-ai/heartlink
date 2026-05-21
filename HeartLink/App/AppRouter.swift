@@ -1,11 +1,10 @@
 import SwiftUI
-import Observation
+import Combine
 
 @MainActor
-@Observable
-final class RouterPath {
-    var path: [Route] = []
-    var presentedSheet: SheetDestination?
+final class RouterPath: ObservableObject {
+    @Published var path: [Route] = []
+    @Published var presentedSheet: SheetDestination?
 
     func navigate(to route: Route) {
         path.append(route)
@@ -17,8 +16,7 @@ final class RouterPath {
 }
 
 @MainActor
-@Observable
-final class TabRouter {
+final class TabRouter: ObservableObject {
     private var routers: [AppTab: RouterPath] = [:]
 
     func router(for tab: AppTab) -> RouterPath {

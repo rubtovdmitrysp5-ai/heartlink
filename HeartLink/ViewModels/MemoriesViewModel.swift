@@ -1,15 +1,14 @@
 import Foundation
-import Observation
+import Combine
 import PhotosUI
 
 @MainActor
-@Observable
-final class MemoriesViewModel {
-    var title = ""
-    var note = ""
-    var locationName = ""
-    var selectedPhoto: PhotosPickerItem?
-    var isSaving = false
+final class MemoriesViewModel: ObservableObject {
+    @Published var title = ""
+    @Published var note = ""
+    @Published var locationName = ""
+    @Published var selectedPhoto: PhotosPickerItem?
+    @Published var isSaving = false
 
     func save(firestoreService: FirestoreService, storageService: StorageService, coupleId: String, userId: String) async {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }

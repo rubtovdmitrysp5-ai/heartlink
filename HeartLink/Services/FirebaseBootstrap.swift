@@ -1,6 +1,5 @@
 import Foundation
 import FirebaseCore
-import FirebaseFirestore
 
 enum FirebaseBootstrap {
     static func configureIfAvailable() -> Bool {
@@ -10,14 +9,8 @@ enum FirebaseBootstrap {
 
         if FirebaseApp.app() == nil {
             FirebaseApp.configure()
-
-            let settings = Firestore.firestore().settings
-            settings.isPersistenceEnabled = true
-            settings.cacheSizeBytes = FirestoreCacheSizeUnlimited
-            Firestore.firestore().settings = settings
         }
 
         return true
     }
 }
-

@@ -4,9 +4,9 @@ import SwiftUI
 struct ChatView: View {
     let currentUser: UserProfile
 
-    @Environment(FirestoreService.self) private var firestoreService
-    @Environment(StorageService.self) private var storageService
-    @State private var viewModel = ChatViewModel()
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var storageService: StorageService
+    @StateObject private var viewModel = ChatViewModel()
     @State private var selectedPhoto: PhotosPickerItem?
 
     var body: some View {
@@ -251,7 +251,7 @@ private struct ChatComposer: View {
 #Preview {
     NavigationStack {
         ChatView(currentUser: .sample)
-            .environment(FirestoreService(isFirebaseEnabled: false))
-            .environment(StorageService(isFirebaseEnabled: false))
+            .environmentObject(FirestoreService(isFirebaseEnabled: false))
+            .environmentObject(StorageService(isFirebaseEnabled: false))
     }
 }

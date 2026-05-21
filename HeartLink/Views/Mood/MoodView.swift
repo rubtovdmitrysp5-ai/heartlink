@@ -3,8 +3,8 @@ import SwiftUI
 struct MoodView: View {
     let currentUser: UserProfile
 
-    @Environment(FirestoreService.self) private var firestoreService
-    @State private var viewModel = MoodViewModel()
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @StateObject private var viewModel = MoodViewModel()
 
     var body: some View {
         ZStack {
@@ -109,7 +109,6 @@ private struct MoodOptionCard: View {
 #Preview {
     NavigationStack {
         MoodView(currentUser: .sample)
-            .environment(FirestoreService(isFirebaseEnabled: false))
+            .environmentObject(FirestoreService(isFirebaseEnabled: false))
     }
 }
-

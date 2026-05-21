@@ -3,11 +3,11 @@ import SwiftUI
 struct HomeView: View {
     let currentUser: UserProfile
 
-    @Environment(FirestoreService.self) private var firestoreService
-    @Environment(RouterPath.self) private var router
-    @Environment(NotificationService.self) private var notificationService
-    @Environment(SecurityService.self) private var securityService
-    @State private var viewModel = HomeViewModel()
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var router: RouterPath
+    @EnvironmentObject private var notificationService: NotificationService
+    @EnvironmentObject private var securityService: SecurityService
+    @StateObject private var viewModel = HomeViewModel()
 
     var body: some View {
         ZStack {
@@ -289,9 +289,9 @@ private struct RecentHighlightsCard: View {
 #Preview {
     NavigationStack {
         HomeView(currentUser: .sample)
-            .environment(FirestoreService(isFirebaseEnabled: false))
-            .environment(RouterPath())
-            .environment(NotificationService(isFirebaseEnabled: false))
-            .environment(SecurityService())
+            .environmentObject(FirestoreService(isFirebaseEnabled: false))
+            .environmentObject(RouterPath())
+            .environmentObject(NotificationService(isFirebaseEnabled: false))
+            .environmentObject(SecurityService())
     }
 }

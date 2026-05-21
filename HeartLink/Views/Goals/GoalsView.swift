@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct GoalsView: View {
-    @Environment(FirestoreService.self) private var firestoreService
-    @Environment(RouterPath.self) private var router
-    @State private var viewModel = GoalsViewModel()
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var router: RouterPath
+    @StateObject private var viewModel = GoalsViewModel()
 
     var body: some View {
         ZStack {
@@ -105,7 +105,7 @@ private struct GoalRow: View {
 
 struct GoalDetailView: View {
     let goalId: String
-    @Environment(FirestoreService.self) private var firestoreService
+    @EnvironmentObject private var firestoreService: FirestoreService
 
     private var goal: CoupleGoal? {
         firestoreService.goals.first { $0.id == goalId }
@@ -155,8 +155,7 @@ struct GoalDetailView: View {
 #Preview {
     NavigationStack {
         GoalsView()
-            .environment(FirestoreService(isFirebaseEnabled: false))
-            .environment(RouterPath())
+            .environmentObject(FirestoreService(isFirebaseEnabled: false))
+            .environmentObject(RouterPath())
     }
 }
-

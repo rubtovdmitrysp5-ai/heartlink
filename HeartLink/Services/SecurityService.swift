@@ -1,14 +1,13 @@
 import Foundation
-import Observation
+import Combine
 import LocalAuthentication
 
 @MainActor
-@Observable
-final class SecurityService {
-    var isLocked = false
-    var privateModeEnabled = false
-    var passcode = ""
-    var failedReason: String?
+final class SecurityService: ObservableObject {
+    @Published var isLocked = false
+    @Published var privateModeEnabled = false
+    @Published var passcode = ""
+    @Published var failedReason: String?
 
     func unlockWithBiometrics() async {
         let context = LAContext()
