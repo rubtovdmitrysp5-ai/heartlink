@@ -1,0 +1,51 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsUser(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isCoupleMember(coupleId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/couples/$(coupleId))
+        && request.auth.uid in [
+          get(/databases/$(database)/documents/couples/$(coupleId)).data.firstUserId,
+          get(/databases/$(database)/documents/couples/$(coupleId)).data.secondUserId
+        ];
+    }
+
+    match /users/{userId} {
+      allow read: if ownsUser(userId) || signedIn() && resource.data.partnerId == request.auth.uid;
+      allow create, update: if ownsUser(userId);
+      allow delete: if false;
+    }
+
+    match /couples/{coupleId} {
+      allow read, update: if isCoupleMember(coupleId);
+      allow create: if signedIn()
+        && request.auth.uid in [request.resource.data.firstUserId, request.resource.data.secondUserId];
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read, create, update: if isCoupleMember(coupleId);
+        allow delete: if false;
+      }
+
+      match /memories/{memoryId} {
+        allow read, create, update: if isCoupleMember(coupleId);
+        allow delete: if isCoupleMember(coupleId);
+      }
+
+      match /goals/{goalId} {
+        allow read, create, update: if isCoupleMember(coupleId);
+        allow delete: if isCoupleMember(coupleId);
+      }
+    }
+  }
+}
+

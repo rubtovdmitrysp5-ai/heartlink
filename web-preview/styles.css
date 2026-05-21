@@ -1,0 +1,1084 @@
+:root {
+  color-scheme: light dark;
+  --text: #2d1728;
+  --muted: rgba(45, 23, 40, 0.6);
+  --surface: rgba(255, 255, 255, 0.58);
+  --surface-strong: rgba(255, 255, 255, 0.78);
+  --stroke: rgba(255, 255, 255, 0.56);
+  --pink: #f43f7a;
+  --rose: #ff7ba5;
+  --purple: #9b5de5;
+  --indigo: #6366f1;
+  --shadow: rgba(55, 30, 72, 0.2);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 18% 12%, rgba(244, 63, 122, 0.24), transparent 28%),
+    radial-gradient(circle at 84% 24%, rgba(99, 102, 241, 0.22), transparent 30%),
+    linear-gradient(135deg, #fff0f5, #f2ecff 48%, #ecf7ff);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+.stage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px 14px;
+}
+
+.iphone {
+  width: min(430px, 100%);
+}
+
+.device-frame {
+  position: relative;
+  width: min(410px, 100%);
+  height: min(860px, calc(100vh - 34px));
+  min-height: 720px;
+  margin: 0 auto;
+  padding: 12px;
+  border-radius: 52px;
+  background: linear-gradient(145deg, #1c1822, #050407);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.08),
+    0 28px 80px rgba(31, 20, 45, 0.34);
+}
+
+.dynamic-island {
+  position: absolute;
+  z-index: 20;
+  top: 22px;
+  left: 50%;
+  width: 116px;
+  height: 34px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #050407;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 42px;
+  background:
+    radial-gradient(circle at 16% 12%, rgba(244, 63, 122, 0.22), transparent 32%),
+    radial-gradient(circle at 92% 8%, rgba(99, 102, 241, 0.22), transparent 30%),
+    linear-gradient(145deg, rgba(255, 246, 250, 0.96), rgba(244, 239, 255, 0.96) 54%, rgba(237, 248, 255, 0.95));
+}
+
+.statusbar {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px 0;
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.statusbar div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.signal,
+.wifi,
+.battery {
+  display: block;
+  background: currentColor;
+}
+
+.signal {
+  width: 18px;
+  height: 10px;
+  clip-path: polygon(0 100%, 20% 70%, 20% 100%, 38% 45%, 38% 100%, 58% 20%, 58% 100%, 82% 0, 82% 100%);
+}
+
+.wifi {
+  width: 15px;
+  height: 11px;
+  border-radius: 50% 50% 0 0;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.battery {
+  width: 24px;
+  height: 11px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 2px currentColor;
+  background: transparent;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: none;
+  padding-top: 52px;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.screen.active {
+  display: block;
+  animation: screen-in 220ms ease forwards;
+}
+
+.content {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 16px 100px;
+  scrollbar-width: none;
+}
+
+.content::-webkit-scrollbar,
+.messages::-webkit-scrollbar {
+  display: none;
+}
+
+.topbar,
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.topbar h1,
+.chat-header h1 {
+  margin: 0;
+  font-size: 31px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.topbar.compact h1,
+.chat-header h1 {
+  font-size: 25px;
+}
+
+.muted,
+.topbar p,
+.chat-header p,
+.avatars-row p,
+.mini-card p,
+.recent-row p,
+.goal-title p,
+.daily-card p,
+.game-card p,
+.partner-mood p,
+.memory-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.round-button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+  box-shadow: 0 12px 28px rgba(244, 63, 122, 0.28);
+}
+
+.glass {
+  border: 1px solid var(--stroke);
+  background: var(--surface);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 18px 38px rgba(62, 35, 78, 0.12);
+}
+
+.avatars-row {
+  display: grid;
+  grid-template-columns: auto 34px auto 1fr;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 16px;
+}
+
+.avatar {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  font-weight: 900;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+}
+
+.pink {
+  background: linear-gradient(135deg, var(--rose), var(--pink));
+}
+
+.indigo {
+  background: linear-gradient(135deg, #a78bfa, var(--indigo));
+}
+
+.link-line {
+  height: 7px;
+  margin: 0 -2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--pink), var(--indigo));
+}
+
+.counter-card {
+  padding: 18px;
+  border-radius: 30px;
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+}
+
+.card-heading b {
+  color: var(--pink);
+  font-size: 24px;
+}
+
+.days-counter {
+  display: block;
+  margin: 8px 0 4px;
+  font-size: clamp(62px, 18vw, 82px);
+  line-height: 0.95;
+  letter-spacing: 0;
+  background: linear-gradient(90deg, var(--pink), var(--purple), var(--indigo));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.counter-card p {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.two-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.mini-card {
+  min-height: 142px;
+  padding: 15px;
+  border-radius: 24px;
+}
+
+.icon-chip,
+.goal-title span,
+.game-card > span,
+.partner-mood > span {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: white;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+}
+
+.mini-card h2,
+.recent-card h2,
+.quick-actions h2,
+.goal-card h2,
+.daily-card h2,
+.game-card h2,
+.partner-mood h2,
+.mood-panel h2,
+.memory-card h2 {
+  margin: 8px 0 5px;
+  letter-spacing: 0;
+}
+
+.mini-card small,
+.memory-card small,
+.partner-mood small {
+  color: var(--muted);
+}
+
+.quick-actions,
+.recent-card {
+  padding: 16px;
+  border-radius: 26px;
+  margin-bottom: 14px;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.action-grid button {
+  min-height: 74px;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 18px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.action-grid span {
+  font-size: 20px;
+  color: var(--pink);
+}
+
+.recent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+}
+
+.photo-chip,
+.goal-chip {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--rose), var(--purple));
+}
+
+.goal-chip {
+  background: linear-gradient(135deg, #8b5cf6, var(--indigo));
+}
+
+.chat-screen {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding-top: 52px;
+}
+
+.chat-header {
+  padding: 16px 16px 10px;
+  margin: 0;
+  background: rgba(255, 255, 255, 0.34);
+  backdrop-filter: blur(22px);
+}
+
+.chat-header .avatar {
+  width: 42px;
+  height: 42px;
+}
+
+.chat-header div {
+  flex: 1;
+}
+
+.secure-dot {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.message {
+  max-width: 78%;
+  padding: 12px 14px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 10px 24px rgba(62, 35, 78, 0.09);
+}
+
+.message span {
+  display: inline-block;
+  margin-left: 6px;
+}
+
+.message.mine {
+  align-self: flex-end;
+  color: white;
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+}
+
+.image-message {
+  display: grid;
+  gap: 8px;
+}
+
+.image-placeholder {
+  width: 198px;
+  height: 138px;
+  border-radius: 17px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.3), transparent),
+    linear-gradient(135deg, var(--rose), var(--purple));
+}
+
+.voice-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.voice-message button {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: white;
+  background: var(--pink);
+}
+
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.wave i {
+  width: 4px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(244, 63, 122, 0.55);
+}
+
+.wave i:nth-child(2),
+.wave i:nth-child(4) {
+  height: 26px;
+}
+
+.reaction-menu {
+  display: flex;
+  gap: 6px;
+}
+
+.reaction-menu button {
+  padding: 7px 9px;
+  border-radius: 999px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  gap: 9px;
+  align-items: center;
+  padding: 10px 14px 16px;
+  background: rgba(255, 255, 255, 0.54);
+  backdrop-filter: blur(24px);
+}
+
+.composer button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: white;
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+}
+
+.composer input,
+.auth-card input,
+.lock-card input,
+.sheet input,
+.daily-card textarea {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  outline: none;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.54);
+  border-radius: 16px;
+}
+
+.composer input {
+  height: 40px;
+  padding: 0 13px;
+}
+
+.map-card {
+  position: relative;
+  height: 190px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 28px;
+  text-align: center;
+}
+
+.map-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.48;
+  background:
+    linear-gradient(90deg, transparent 23%, rgba(244, 63, 122, 0.24) 24%, transparent 25%),
+    linear-gradient(0deg, transparent 33%, rgba(99, 102, 241, 0.18) 34%, transparent 35%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.52), rgba(244, 63, 122, 0.14));
+  background-size: 72px 72px;
+}
+
+.map-card strong,
+.map-card p {
+  position: relative;
+  z-index: 1;
+}
+
+.map-pin {
+  position: absolute;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  border: 4px solid white;
+  border-radius: 50% 50% 50% 0;
+  background: var(--pink);
+  transform: rotate(-45deg);
+}
+
+.map-pin.one {
+  left: 72px;
+  top: 58px;
+}
+
+.map-pin.two {
+  right: 78px;
+  top: 76px;
+  background: var(--purple);
+}
+
+.map-pin.three {
+  left: 168px;
+  bottom: 54px;
+  background: var(--indigo);
+}
+
+.memory-card {
+  display: grid;
+  grid-template-columns: 86px 1fr;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 26px;
+  margin-bottom: 12px;
+}
+
+.memory-photo {
+  display: block;
+  min-height: 104px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--rose), var(--purple));
+}
+
+.memory-photo.second {
+  background: linear-gradient(135deg, #f6c177, var(--pink));
+}
+
+.memory-photo.third {
+  background: linear-gradient(135deg, #78dcca, var(--indigo));
+}
+
+.goal-card,
+.daily-card,
+.game-card,
+.partner-mood,
+.mood-panel {
+  padding: 16px;
+  border-radius: 28px;
+  margin-bottom: 14px;
+}
+
+.goal-title,
+.game-card,
+.partner-mood {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+}
+
+.progress {
+  height: 9px;
+  overflow: hidden;
+  margin: 16px 0 10px;
+  border-radius: 999px;
+  background: rgba(45, 23, 40, 0.12);
+}
+
+.progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pink), var(--purple));
+}
+
+.goal-card footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.daily-card textarea {
+  min-height: 98px;
+  resize: none;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.primary,
+.ghost {
+  min-height: 46px;
+  border-radius: 18px;
+  font-weight: 900;
+}
+
+.primary {
+  color: white;
+  background: linear-gradient(135deg, var(--pink), var(--purple), var(--indigo));
+  box-shadow: 0 16px 32px rgba(244, 63, 122, 0.24);
+}
+
+.ghost {
+  color: var(--pink);
+  background: transparent;
+}
+
+.full {
+  width: 100%;
+}
+
+.choice-grid,
+.mood-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.choice-grid button,
+.mood-grid button {
+  min-height: 48px;
+  border-radius: 16px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.48);
+  font-weight: 800;
+}
+
+.choice-grid button.selected {
+  color: white;
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+}
+
+.mood-grid button {
+  min-height: 88px;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  font-size: 24px;
+}
+
+.mood-grid span {
+  font-size: 13px;
+}
+
+.mood-grid .selected {
+  color: white;
+  background: linear-gradient(135deg, var(--pink), var(--purple));
+}
+
+.tabbar {
+  position: absolute;
+  z-index: 9;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  padding: 9px 8px 14px;
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(26px);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.tabbar button {
+  min-height: 50px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  border-radius: 15px;
+  color: rgba(45, 23, 40, 0.58);
+  background: transparent;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.tabbar span {
+  font-size: 17px;
+}
+
+.tabbar button.active {
+  color: var(--pink);
+  background: rgba(244, 63, 122, 0.12);
+}
+
+.overlay {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  display: none;
+  place-items: center;
+  padding: 22px;
+  background:
+    radial-gradient(circle at 20% 18%, rgba(244, 63, 122, 0.24), transparent 28%),
+    linear-gradient(145deg, rgba(255, 246, 250, 0.95), rgba(242, 236, 255, 0.95));
+}
+
+.overlay.active {
+  display: grid;
+  animation: overlay-in 220ms ease;
+}
+
+.launch {
+  position: absolute;
+  z-index: 45;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  background: linear-gradient(145deg, #fff1f7, #f1ebff);
+  animation: launch-out 900ms 600ms ease forwards;
+}
+
+.launch h1,
+.launch p {
+  margin: 0;
+}
+
+.launch-icon,
+.mini-logo,
+.lock-icon,
+.onboarding-icon {
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  border-radius: 28px;
+  color: white;
+  font-size: 48px;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--pink), var(--purple), var(--indigo));
+  box-shadow: 0 20px 44px rgba(244, 63, 122, 0.24);
+}
+
+.onboarding-card,
+.auth-card,
+.lock-card {
+  width: 100%;
+  display: grid;
+  gap: 13px;
+  text-align: center;
+}
+
+.auth-card,
+.lock-card {
+  padding: 20px;
+  border-radius: 30px;
+}
+
+.auth-card label,
+.lock-card label,
+.sheet label {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.auth-card input,
+.lock-card input,
+.sheet input {
+  height: 44px;
+  padding: 0 13px;
+}
+
+.onboarding-card h1,
+.auth-card h1,
+.lock-card h1 {
+  margin: 4px 0 0;
+  font-size: 28px;
+  letter-spacing: 0;
+}
+
+.onboarding-card p,
+.auth-card p,
+.lock-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.eyebrow {
+  color: var(--pink) !important;
+  font-weight: 900;
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+}
+
+.dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(45, 23, 40, 0.18);
+}
+
+.dots .active {
+  width: 26px;
+  background: var(--pink);
+}
+
+.sheet {
+  position: absolute;
+  z-index: 25;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  display: none;
+  gap: 12px;
+  padding: 12px 18px 22px;
+  border-radius: 30px 30px 0 0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 -16px 46px rgba(55, 30, 72, 0.22);
+  backdrop-filter: blur(28px);
+}
+
+.sheet.active {
+  display: grid;
+  animation: sheet-in 220ms ease;
+}
+
+.sheet h2 {
+  margin: 0;
+}
+
+.sheet-handle {
+  justify-self: center;
+  width: 46px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(45, 23, 40, 0.18);
+}
+
+.toggle {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  grid-template-columns: 1fr auto;
+}
+
+.toggle input {
+  width: 46px;
+  accent-color: var(--pink);
+}
+
+.upload-box {
+  height: 104px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  color: var(--pink);
+  font-weight: 900;
+  background: rgba(244, 63, 122, 0.12);
+}
+
+.toast {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: 92px;
+  display: none;
+  transform: translateX(-50%);
+  padding: 10px 14px;
+  border-radius: 999px;
+  color: white;
+  background: rgba(45, 23, 40, 0.82);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.toast.active {
+  display: block;
+  animation: toast-in 1700ms ease forwards;
+}
+
+@media (max-width: 440px) {
+  .stage {
+    padding: 0;
+  }
+
+  .device-frame {
+    width: 100vw;
+    height: 100vh;
+    min-height: 100vh;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .app {
+    border-radius: 0;
+  }
+
+  .dynamic-island {
+    top: 10px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #fff6fb;
+    --muted: rgba(255, 246, 251, 0.62);
+    --surface: rgba(35, 25, 43, 0.64);
+    --surface-strong: rgba(35, 25, 43, 0.82);
+    --stroke: rgba(255, 255, 255, 0.12);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 16% 14%, rgba(244, 63, 122, 0.18), transparent 28%),
+      radial-gradient(circle at 84% 24%, rgba(99, 102, 241, 0.18), transparent 30%),
+      linear-gradient(135deg, #100b16, #241326 54%, #11182c);
+  }
+
+  .app,
+  .overlay {
+    background:
+      radial-gradient(circle at 18% 12%, rgba(244, 63, 122, 0.16), transparent 30%),
+      linear-gradient(145deg, rgba(18, 13, 25, 0.98), rgba(34, 17, 43, 0.98) 54%, rgba(14, 20, 38, 0.98));
+  }
+
+  .launch {
+    background: linear-gradient(145deg, #130e1c, #24132a);
+  }
+
+  .action-grid button,
+  .choice-grid button,
+  .reaction-menu button,
+  .mood-grid button,
+  .composer input,
+  .auth-card input,
+  .lock-card input,
+  .sheet input,
+  .daily-card textarea {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .chat-header,
+  .composer,
+  .tabbar,
+  .sheet {
+    background: rgba(18, 13, 25, 0.82);
+  }
+
+  .message {
+    background: rgba(255, 255, 255, 0.09);
+  }
+}
+
+@keyframes screen-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+@keyframes toast-in {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+  12%,
+  82% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 10px);
+  }
+}
+
+@keyframes launch-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}

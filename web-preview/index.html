@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Предпросмотр HeartLink</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="stage" aria-label="Предпросмотр приложения HeartLink">
+      <section class="iphone" aria-label="iPhone с приложением HeartLink">
+        <div class="device-frame">
+          <div class="dynamic-island" aria-hidden="true"></div>
+
+          <div class="app" id="app">
+            <div class="launch" id="launch" aria-hidden="true">
+              <div class="launch-icon">♥</div>
+              <h1>HeartLink</h1>
+              <p>Ваше пространство для двоих</p>
+            </div>
+
+            <section class="overlay onboarding active" id="onboarding">
+              <div class="onboarding-card">
+                <div class="onboarding-icon" id="onboardingIcon">♡</div>
+                <p class="eyebrow">HeartLink</p>
+                <h1 id="onboardingTitle">Личное пространство для пары</h1>
+                <p id="onboardingText">Сообщения, воспоминания, цели и настроение в одном нежном приложении.</p>
+                <div class="dots" aria-hidden="true">
+                  <span class="active"></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <button class="primary full" id="nextOnboarding">Дальше</button>
+                <button class="ghost full" id="skipOnboarding">Сразу к приложению</button>
+              </div>
+            </section>
+
+            <section class="overlay auth" id="auth">
+              <div class="auth-card glass">
+                <div class="mini-logo">♥</div>
+                <h1>HeartLink</h1>
+                <p>Войдите в ваше пространство</p>
+                <label>
+                  <span>Эл. почта</span>
+                  <input value="alina@example.com" aria-label="Эл. почта" />
+                </label>
+                <label>
+                  <span>Пароль</span>
+                  <input value="••••••••" aria-label="Пароль" />
+                </label>
+                <button class="primary full" id="loginButton">Войти</button>
+                <button class="ghost full">Создать новый аккаунт</button>
+              </div>
+            </section>
+
+            <section class="overlay lock" id="lock">
+              <div class="lock-card glass">
+                <div class="lock-icon">♥</div>
+                <h1>HeartLink защищён</h1>
+                <p>Разблокируйте личное пространство.</p>
+                <input inputmode="numeric" value="1420" aria-label="Код-пароль" />
+                <button class="primary full" id="unlockButton">Разблокировать Face ID</button>
+                <button class="ghost full" id="unlockByCode">Открыть по коду</button>
+              </div>
+            </section>
+
+            <header class="statusbar" aria-label="Статус iPhone">
+              <span>19:52</span>
+              <div>
+                <span class="signal"></span>
+                <span class="wifi"></span>
+                <span class="battery"></span>
+              </div>
+            </header>
+
+            <section class="screen active" data-screen="home">
+              <div class="content">
+                <header class="topbar">
+                  <div>
+                    <p class="muted">Привет, Алина</p>
+                    <h1>HeartLink</h1>
+                  </div>
+                  <button class="round-button" data-open-lock aria-label="Скрыть приложение">⌕</button>
+                </header>
+
+                <div class="avatars-row">
+                  <span class="avatar pink">А</span>
+                  <span class="link-line"></span>
+                  <span class="avatar indigo">М</span>
+                  <div>
+                    <strong>Алина и Марк</strong>
+                    <p>Ваше пространство для двоих</p>
+                  </div>
+                </div>
+
+                <article class="counter-card glass">
+                  <div class="card-heading">
+                    <span>Вы вместе</span>
+                    <b>♡</b>
+                  </div>
+                  <strong class="days-counter" data-count="486">0</strong>
+                  <p>дней вместе</p>
+                </article>
+
+                <section class="two-grid">
+                  <article class="glass mini-card">
+                    <span class="icon-chip">◷</span>
+                    <p>До годовщины</p>
+                    <h2>269 дней</h2>
+                    <small>14 февраля</small>
+                  </article>
+                  <article class="glass mini-card">
+                    <span class="icon-chip">☺</span>
+                    <p>Марк сейчас</p>
+                    <h2>Скучает</h2>
+                    <small>обновлено сейчас</small>
+                  </article>
+                </section>
+
+                <article class="glass quick-actions">
+                  <h2>Быстрые действия</h2>
+                  <div class="action-grid">
+                    <button data-toast="Уведомления включены">
+                      <span>◉</span>
+                      Уведомления
+                    </button>
+                    <button data-open-settings>
+                      <span>⌘</span>
+                      Защита
+                    </button>
+                    <button data-open-lock>
+                      <span>◌</span>
+                      Скрыть
+                    </button>
+                  </div>
+                </article>
+
+                <article class="glass recent-card">
+                  <h2>Недавнее</h2>
+                  <div class="recent-row">
+                    <span class="photo-chip"></span>
+                    <div>
+                      <strong>Первая поездка</strong>
+                      <p>Санкт-Петербург</p>
+                    </div>
+                  </div>
+                  <div class="recent-row">
+                    <span class="goal-chip"></span>
+                    <div>
+                      <strong>Путешествие к морю</strong>
+                      <p>62% выполнено</p>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="screen" data-screen="chat">
+              <div class="chat-screen">
+                <header class="chat-header">
+                  <span class="avatar indigo">М</span>
+                  <div>
+                    <h1>Личный чат</h1>
+                    <p>Марк скучает</p>
+                  </div>
+                  <span class="secure-dot">⌂</span>
+                </header>
+
+                <div class="messages">
+                  <div class="message partner">Увидимся вечером? Я забронировал столик.<span>❤️</span></div>
+                  <div class="message mine">Да. Уже выбираю платье.</div>
+                  <div class="message partner image-message">
+                    <div class="image-placeholder"></div>
+                    Фото
+                  </div>
+                  <div class="message partner voice-message">
+                    <button aria-label="Воспроизвести голосовое">▶</button>
+                    <div class="wave"><i></i><i></i><i></i><i></i><i></i></div>
+                    <b>0:18</b>
+                  </div>
+                  <div class="reaction-menu">
+                    <button>Сердце ❤️</button>
+                    <button>Нежность 🥰</button>
+                    <button>Искра ✨</button>
+                  </div>
+                </div>
+
+                <form class="composer" id="composer">
+                  <button type="button" aria-label="Отправить фото">▧</button>
+                  <input id="messageInput" placeholder="Напишите нежное сообщение" />
+                  <button type="submit" aria-label="Отправить">➤</button>
+                </form>
+              </div>
+            </section>
+
+            <section class="screen" data-screen="memories">
+              <div class="content">
+                <header class="topbar compact">
+                  <div>
+                    <p class="muted">Ваш общий таймлайн</p>
+                    <h1>Воспоминания</h1>
+                  </div>
+                  <button class="round-button" data-add-memory aria-label="Добавить воспоминание">＋</button>
+                </header>
+
+                <article class="glass map-card">
+                  <div class="map-pin one"></div>
+                  <div class="map-pin two"></div>
+                  <div class="map-pin three"></div>
+                  <strong>Места ваших историй</strong>
+                  <p>3 отметки на карте</p>
+                </article>
+
+                <article class="glass memory-card">
+                  <span class="memory-photo first"></span>
+                  <div>
+                    <h2>Первая поездка</h2>
+                    <p>Тот самый дождливый день, когда мы смеялись без остановки.</p>
+                    <small>Санкт-Петербург · 26 мая 2025 г.</small>
+                  </div>
+                </article>
+
+                <article class="glass memory-card">
+                  <span class="memory-photo second"></span>
+                  <div>
+                    <h2>Кофе у окна</h2>
+                    <p>Маленькое место, которое стало нашим.</p>
+                    <small>Москва · 9 января 2026 г.</small>
+                  </div>
+                </article>
+
+                <article class="glass memory-card">
+                  <span class="memory-photo third"></span>
+                  <div>
+                    <h2>Вечер без телефонов</h2>
+                    <p>Музыка, свечи и разговоры до ночи.</p>
+                    <small>Дом · 27 апреля 2026 г.</small>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="screen" data-screen="goals">
+              <div class="content">
+                <header class="topbar compact">
+                  <div>
+                    <p class="muted">Задачи, желания и накопления</p>
+                    <h1>Цели</h1>
+                  </div>
+                </header>
+
+                <article class="glass goal-card">
+                  <div class="goal-title">
+                    <span>₽</span>
+                    <div>
+                      <p>Накопление</p>
+                      <h2>Путешествие к морю</h2>
+                    </div>
+                  </div>
+                  <div class="progress"><i style="width: 62%"></i></div>
+                  <footer>
+                    <span>62% выполнено</span>
+                    <b>111 600 / 180 000 ₽</b>
+                  </footer>
+                </article>
+
+                <article class="glass goal-card">
+                  <div class="goal-title">
+                    <span>✓</span>
+                    <div>
+                      <p>Задача</p>
+                      <h2>Вечер без дел</h2>
+                    </div>
+                  </div>
+                  <div class="progress"><i style="width: 35%"></i></div>
+                  <footer>
+                    <span>35% выполнено</span>
+                    <b>через 3 дня</b>
+                  </footer>
+                </article>
+
+                <article class="glass goal-card">
+                  <div class="goal-title">
+                    <span>✦</span>
+                    <div>
+                      <p>Желание</p>
+                      <h2>Керамические кружки</h2>
+                    </div>
+                  </div>
+                  <div class="progress"><i style="width: 10%"></i></div>
+                  <footer>
+                    <span>10% выполнено</span>
+                    <b>в списке желаний</b>
+                  </footer>
+                </article>
+              </div>
+            </section>
+
+            <section class="screen" data-screen="games">
+              <div class="content">
+                <header class="topbar compact">
+                  <div>
+                    <p class="muted">Вопросы, квизы и задания</p>
+                    <h1>Игры любви</h1>
+                  </div>
+                </header>
+
+                <article class="glass daily-card">
+                  <p>Сегодня</p>
+                  <h2>Какой момент этой недели ты хочешь запомнить вместе?</h2>
+                  <textarea aria-label="Ответ на вопрос дня" placeholder="Ваш ответ"></textarea>
+                  <button class="primary full" data-toast="Ответ отправлен партнёру">Отправить партнёру</button>
+                </article>
+
+                <article class="glass game-card">
+                  <span>?</span>
+                  <div>
+                    <h2>Квиз о партнёре</h2>
+                    <p>Какой десерт партнёр выберет первым?</p>
+                    <div class="choice-grid">
+                      <button>Тирамису</button>
+                      <button>Чизкейк</button>
+                      <button>Мороженое</button>
+                      <button>Шоколадный торт</button>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="glass game-card">
+                  <span>♡</span>
+                  <div>
+                    <h2>Романтичное задание</h2>
+                    <p>Отправь голосовое с одной причиной, почему ты любишь партнёра.</p>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="screen" data-screen="mood">
+              <div class="content">
+                <header class="topbar compact">
+                  <div>
+                    <p class="muted">Партнёр видит ваш статус</p>
+                    <h1>Настроение</h1>
+                  </div>
+                </header>
+
+                <article class="glass partner-mood">
+                  <span>♡</span>
+                  <div>
+                    <p>Марк сейчас</p>
+                    <h2>Скучает</h2>
+                    <small>Статус обновляется автоматически.</small>
+                  </div>
+                </article>
+
+                <article class="glass mood-panel">
+                  <h2>Как вы сейчас?</h2>
+                  <div class="mood-grid">
+                    <button class="selected" data-mood="Счастлива">☺<span>Счастлива</span></button>
+                    <button data-mood="Грустно">☔<span>Грустно</span></button>
+                    <button data-mood="Скучаю">♡<span>Скучаю</span></button>
+                    <button data-mood="Занята">☾<span>Занята</span></button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <nav class="tabbar" aria-label="Навигация приложения">
+              <button class="active" data-target="home"><span>♡</span>Главная</button>
+              <button data-target="chat"><span>☰</span>Чат</button>
+              <button data-target="memories"><span>▧</span>Память</button>
+              <button data-target="goals"><span>◎</span>Цели</button>
+              <button data-target="games"><span>✦</span>Игры</button>
+              <button data-target="mood"><span>☺</span>Настрой</button>
+            </nav>
+
+            <section class="sheet" id="settingsSheet" aria-label="Настройки безопасности">
+              <div class="sheet-handle"></div>
+              <h2>Защита</h2>
+              <label class="toggle">
+                <span>Приватный режим</span>
+                <input type="checkbox" checked />
+              </label>
+              <label>
+                <span>Новый код-пароль</span>
+                <input inputmode="numeric" value="1420" />
+              </label>
+              <button class="primary full" id="closeSettings">Сохранить код</button>
+            </section>
+
+            <section class="sheet" id="memorySheet" aria-label="Новое воспоминание">
+              <div class="sheet-handle"></div>
+              <h2>Новое воспоминание</h2>
+              <div class="upload-box">Добавить фото</div>
+              <label><span>Название</span><input value="Новый вечер" /></label>
+              <label><span>Описание</span><input value="Маленький момент только для нас." /></label>
+              <label><span>Место</span><input value="Дом" /></label>
+              <button class="primary full" id="closeMemory">Сохранить</button>
+            </section>
+
+            <div class="toast" id="toast">Готово</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

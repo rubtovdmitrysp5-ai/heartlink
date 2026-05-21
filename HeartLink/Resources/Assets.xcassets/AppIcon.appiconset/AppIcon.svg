@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <path d="M512 736C470 694 416 656 357 610C273 545 224 492 224 410C224 329 285 272 361 272C423 272 469 305 512 360C555 305 601 272 663 272C739 272 800 329 800 410C800 492 751 545 667 610C608 656 554 694 512 736Z" fill="white" fill-opacity="0.94"/>
+  <path d="M382 432C421 432 453 464 453 503C453 542 421 574 382 574C343 574 311 542 311 503C311 464 343 432 382 432Z" fill="url(#inner1)" fill-opacity="0.96"/>
+  <path d="M642 432C681 432 713 464 713 503C713 542 681 574 642 574C603 574 571 542 571 503C571 464 603 432 642 432Z" fill="url(#inner2)" fill-opacity="0.96"/>
+  <path d="M453 503H571" stroke="url(#line)" stroke-width="42" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="128" y1="80" x2="896" y2="944" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7BA5"/>
+      <stop offset="0.48" stop-color="#D65ACF"/>
+      <stop offset="1" stop-color="#6E6AF2"/>
+    </linearGradient>
+    <linearGradient id="inner1" x1="311" y1="432" x2="453" y2="574" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8FA3"/>
+      <stop offset="1" stop-color="#F43F5E"/>
+    </linearGradient>
+    <linearGradient id="inner2" x1="571" y1="432" x2="713" y2="574" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="line" x1="453" y1="503" x2="571" y2="503" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F43F5E"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+  </defs>
+</svg>
+

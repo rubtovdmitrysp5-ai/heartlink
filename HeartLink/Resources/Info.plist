@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDisplayName</key>
+  <string>HeartLink</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key>
+  <string>$(CURRENT_PROJECT_VERSION)</string>
+  <key>FirebaseAppDelegateProxyEnabled</key>
+  <false/>
+  <key>NSFaceIDUsageDescription</key>
+  <string>HeartLink использует Face ID, чтобы защищать ваши личные сообщения, воспоминания и цели.</string>
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>HeartLink нужен доступ к фото, чтобы добавлять общие воспоминания.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>HeartLink использует камеру, чтобы отправлять фотографии и создавать воспоминания.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>HeartLink использует микрофон для голосовых сообщений.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>HeartLink использует геопозицию, чтобы отмечать места ваших общих воспоминаний.</string>
+  <key>UILaunchStoryboardName</key>
+  <string>LaunchScreen</string>
+  <key>UIApplicationSceneManifest</key>
+  <dict>
+    <key>UIApplicationSupportsMultipleScenes</key>
+    <false/>
+  </dict>
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>remote-notification</string>
+    <string>audio</string>
+  </array>
+</dict>
+</plist>
+
