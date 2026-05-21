@@ -45,6 +45,14 @@ jobs:
             exit 1
           fi
 
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.example.heartlink" "$APP_PATH/Info.plist" || \
+            /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.example.heartlink" "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist"
+
+          rm -rf "$APP_PATH/PlugIns"
+          find "$APP_PATH" -name "_CodeSignature" -type d -prune -exec rm -rf {} +
+          find "$APP_PATH" -name "embedded.mobileprovision" -type f -delete
+
           rm -rf build/Payload build/HeartLink-unsigned.ipa
           mkdir -p build/Payload
           ditto "$APP_PATH" build/Payload/HeartLink.app
