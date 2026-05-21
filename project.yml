@@ -6,7 +6,7 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    SWIFT_VERSION: "5.0"
+    SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: ""
 packages:
   Firebase:
@@ -47,6 +47,9 @@ targets:
         product: FirebaseAnalytics
       - package: Firebase
         product: FirebaseCrashlytics
+      - sdk: PhotosUI.framework
+      - sdk: LocalAuthentication.framework
+      - sdk: MapKit.framework
       - target: HeartLinkWidgets
   HeartLinkWidgets:
     type: app-extension
