@@ -1,8 +1,6 @@
 import Foundation
 import Combine
 import FirebaseStorage
-import PhotosUI
-import SwiftUI
 
 @MainActor
 final class StorageService: ObservableObject {
@@ -12,8 +10,8 @@ final class StorageService: ObservableObject {
         self.isFirebaseEnabled = isFirebaseEnabled
     }
 
-    func uploadImage(_ item: PhotosPickerItem?, path: String) async throws -> URL? {
-        guard let item, let data = try await item.loadTransferable(type: Data.self) else {
+    func uploadImageData(_ data: Data?, path: String) async throws -> URL? {
+        guard let data else {
             return nil
         }
 

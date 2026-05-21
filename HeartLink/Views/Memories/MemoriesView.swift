@@ -1,4 +1,5 @@
 import MapKit
+import PhotosUI
 import SwiftUI
 
 struct MemoriesView: View {
@@ -207,6 +208,7 @@ struct AddMemoryView: View {
     @EnvironmentObject private var firestoreService: FirestoreService
     @EnvironmentObject private var storageService: StorageService
     @StateObject private var viewModel = MemoriesViewModel()
+    @State private var selectedPhoto: PhotosPickerItem?
 
     private var userId: String {
         if case .signedIn(let user) = authenticationService.state {
@@ -221,7 +223,7 @@ struct AddMemoryView: View {
                 RomanticBackground()
 
                 VStack(spacing: 14) {
-                    PhotosPicker(selection: $viewModel.selectedPhoto, matching: .images) {
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
                         RoundedRectangle(cornerRadius: 26, style: .continuous)
                             .fill(.ultraThinMaterial)
                             .frame(height: 154)
@@ -247,12 +249,15 @@ struct AddMemoryView: View {
 
                     PrimaryActionButton(title: "Сохранить", systemImage: "heart.fill", isLoading: viewModel.isSaving) {
                         Task {
+                            let imageData = try? await selectedPhoto?.loadTransferable(type: Data.self)
                             await viewModel.save(
+                                imageData: imageData,
                                 firestoreService: firestoreService,
                                 storageService: storageService,
                                 coupleId: firestoreService.couple.id,
                                 userId: userId
                             )
+                            selectedPhoto = nil
                             dismiss()
                         }
                     }

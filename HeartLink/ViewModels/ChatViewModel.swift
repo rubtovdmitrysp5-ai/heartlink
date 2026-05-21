@@ -1,6 +1,5 @@
 import Foundation
 import Combine
-import PhotosUI
 
 @MainActor
 final class ChatViewModel: ObservableObject {
@@ -18,14 +17,14 @@ final class ChatViewModel: ObservableObject {
     }
 
     func sendImage(
-        _ item: PhotosPickerItem?,
+        _ imageData: Data?,
         firestoreService: FirestoreService,
         storageService: StorageService,
         coupleId: String,
         authorId: String
     ) async {
-        let imageURL = try? await storageService.uploadImage(
-            item,
+        let imageURL = try? await storageService.uploadImageData(
+            imageData,
             path: "couples/\(coupleId)/messages/\(UUID().uuidString).jpg"
         )
         await firestoreService.sendImageMessage(imageURL: imageURL, coupleId: coupleId, authorId: authorId)

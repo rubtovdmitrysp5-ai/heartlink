@@ -62,9 +62,12 @@ struct ChatView: View {
         .navigationTitle("Личный чат")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: selectedPhoto) { _, newValue in
+            guard let newValue else { return }
+
             Task {
+                let imageData = try? await newValue.loadTransferable(type: Data.self)
                 await viewModel.sendImage(
-                    newValue,
+                    imageData,
                     firestoreService: firestoreService,
                     storageService: storageService,
                     coupleId: firestoreService.couple.id,

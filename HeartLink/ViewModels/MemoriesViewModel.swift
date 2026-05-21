@@ -1,22 +1,20 @@
 import Foundation
 import Combine
-import PhotosUI
 
 @MainActor
 final class MemoriesViewModel: ObservableObject {
     @Published var title = ""
     @Published var note = ""
     @Published var locationName = ""
-    @Published var selectedPhoto: PhotosPickerItem?
     @Published var isSaving = false
 
-    func save(firestoreService: FirestoreService, storageService: StorageService, coupleId: String, userId: String) async {
+    func save(imageData: Data?, firestoreService: FirestoreService, storageService: StorageService, coupleId: String, userId: String) async {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         isSaving = true
         defer { isSaving = false }
 
-        let imageURL = try? await storageService.uploadImage(
-            selectedPhoto,
+        let imageURL = try? await storageService.uploadImageData(
+            imageData,
             path: "couples/\(coupleId)/memories/\(UUID().uuidString).jpg"
         )
 
@@ -31,6 +29,5 @@ final class MemoriesViewModel: ObservableObject {
         title = ""
         note = ""
         locationName = ""
-        selectedPhoto = nil
     }
 }
