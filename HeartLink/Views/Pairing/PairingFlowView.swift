@@ -102,7 +102,7 @@ private struct CodePairingCard: View {
                         }
                     Text(pairingService.isServerReachable ? "Сервер подключен или используется сохраненная сессия." : "Сервер недоступен. Можно продолжить в тестовом режиме.")
                         .font(.caption)
-                        .foregroundStyle(pairingService.isServerReachable ? .secondary : .orange)
+                        .foregroundStyle(pairingService.isServerReachable ? Color.secondary : Color.orange)
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
