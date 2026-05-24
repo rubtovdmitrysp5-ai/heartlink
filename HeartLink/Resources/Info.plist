@@ -20,6 +20,13 @@
   <string>$(CURRENT_PROJECT_VERSION)</string>
   <key>FirebaseAppDelegateProxyEnabled</key>
   <false/>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>HeartLink подключается к локальному серверу на вашем ПК для тестирования связывания пары.</string>
   <key>NSFaceIDUsageDescription</key>
   <string>HeartLink использует Face ID, чтобы защищать ваши личные сообщения, воспоминания и цели.</string>
   <key>NSPhotoLibraryUsageDescription</key>

@@ -14,6 +14,7 @@ struct HeartLinkApp: App {
                 .environmentObject(container.storageService)
                 .environmentObject(container.notificationService)
                 .environmentObject(container.securityService)
+                .environmentObject(container.localPairingService)
                 .task {
                     container.start()
                 }

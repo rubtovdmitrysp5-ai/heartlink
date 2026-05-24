@@ -18,6 +18,11 @@ final class FirestoreService: ObservableObject {
         self.isFirebaseEnabled = isFirebaseEnabled
     }
 
+    func applyLocalPairing(couple: Couple, partner: UserProfile) {
+        self.couple = couple
+        self.partner = partner
+    }
+
     func start(user: UserProfile) {
         guard isFirebaseEnabled else { return }
         removeListeners()

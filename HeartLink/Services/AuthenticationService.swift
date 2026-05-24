@@ -99,6 +99,10 @@ final class AuthenticationService: ObservableObject {
         state = .signedOut
     }
 
+    func useLocalUser(_ user: UserProfile) {
+        state = .signedIn(user)
+    }
+
     private func fetchProfile(userId: String, email: String) async throws -> UserProfile {
         let snapshot = try await Firestore.firestore().collection("users").document(userId).getDocument()
         let data = snapshot.data() ?? [:]

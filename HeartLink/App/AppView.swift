@@ -4,6 +4,7 @@ struct AppView: View {
     @EnvironmentObject private var container: AppContainer
     @EnvironmentObject private var authenticationService: AuthenticationService
     @EnvironmentObject private var securityService: SecurityService
+    @EnvironmentObject private var localPairingService: LocalPairingService
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
@@ -12,6 +13,11 @@ struct AppView: View {
             if !hasCompletedOnboarding {
                 OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            } else if localPairingService.needsPairingFlow {
+                PairingFlowView { session in
+                    container.applyLocalPairing(session)
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
                 switch authenticationService.state {
                 case .checking:
@@ -34,6 +40,7 @@ struct AppView: View {
             }
         }
         .animation(.smooth(duration: 0.35), value: hasCompletedOnboarding)
+        .animation(.smooth(duration: 0.35), value: localPairingService.needsPairingFlow)
         .animation(.smooth(duration: 0.35), value: securityService.isLocked)
         .onChange(of: scenePhase) { _, phase in
             if phase != .active, securityService.privateModeEnabled {
@@ -70,4 +77,5 @@ private struct SplashLoadingView: View {
         .environmentObject(StorageService(isFirebaseEnabled: false))
         .environmentObject(NotificationService(isFirebaseEnabled: false))
         .environmentObject(SecurityService())
+        .environmentObject(LocalPairingService())
 }

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HeartLink local server</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: linear-gradient(135deg, #fff0f5, #f4ecff, #eef7ff);
+        color: #241b2f;
+      }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      main {
+        width: min(560px, 100%);
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        border-radius: 28px;
+        padding: 28px;
+        background: rgba(255, 255, 255, 0.62);
+        box-shadow: 0 24px 70px rgba(80, 35, 95, 0.18);
+        backdrop-filter: blur(18px);
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 34px;
+      }
+      p {
+        color: #6f6478;
+        line-height: 1.5;
+      }
+      button {
+        width: 100%;
+        border: 0;
+        border-radius: 18px;
+        padding: 15px 18px;
+        color: white;
+        font-size: 16px;
+        font-weight: 700;
+        cursor: pointer;
+        background: linear-gradient(135deg, #ec4899, #8b5cf6, #6366f1);
+      }
+      code {
+        display: block;
+        margin: 18px 0;
+        padding: 18px;
+        border-radius: 18px;
+        text-align: center;
+        font-size: 34px;
+        font-weight: 900;
+        letter-spacing: 0.04em;
+        color: #be185d;
+        background: rgba(255, 255, 255, 0.72);
+      }
+      .muted {
+        font-size: 13px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          background: linear-gradient(135deg, #15111d, #291429, #121827);
+          color: #fff7fb;
+        }
+        main {
+          background: rgba(30, 24, 38, 0.72);
+          border-color: rgba(255, 255, 255, 0.12);
+        }
+        p {
+          color: #c8b9d3;
+        }
+        code {
+          color: #f9a8d4;
+          background: rgba(255, 255, 255, 0.08);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>HeartLink</h1>
+      <p>Тестовая панель локального сервера. Здесь можно создать второго пользователя, если у вас только один iPhone.</p>
+      <button id="create">Создать тестового пользователя</button>
+      <code id="code">HL-000000</code>
+      <p class="muted">Введите этот код в приложении на iPhone или используйте кнопку “Создать тестового партнера” прямо в приложении.</p>
+    </main>
+    <script>
+      const button = document.getElementById("create");
+      const code = document.getElementById("code");
+
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        button.textContent = "Создаем...";
+        try {
+          const response = await fetch("/api/session/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deviceName: "Browser" })
+          });
+          const data = await response.json();
+          code.textContent = data.session.personalCode;
+          button.textContent = "Создать еще одного";
+        } catch (error) {
+          code.textContent = "Ошибка";
+          button.textContent = "Повторить";
+        } finally {
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
