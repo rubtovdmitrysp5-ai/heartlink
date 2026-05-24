@@ -7,20 +7,13 @@ final class PairingViewModel: ObservableObject {
     @Published var displayName = ""
     @Published var partnerName = ""
     @Published var relationshipStartedAt = Calendar.current.date(byAdding: .day, value: -100, to: .now) ?? .now
-    @Published var serverURL = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var statusMessage = "Подготовка личного кода..."
 
     func prepare(using service: LocalPairingService) async {
-        serverURL = service.baseURLString
         await service.startSession()
-    }
-
-    func saveServerURL(using service: LocalPairingService) async {
-        service.updateBaseURL(serverURL)
-        if service.session == nil {
-            await service.startSession()
-        }
+        statusMessage = service.isServerReachable ? "Сервер подключен" : "Сервер недоступен. Можно создать тестового партнера."
     }
 
     func linkPartner(using service: LocalPairingService) async {
@@ -30,15 +23,17 @@ final class PairingViewModel: ObservableObject {
         }
 
         await run {
-            await saveServerURL(using: service)
+            statusMessage = "Ищем партнера..."
             try await service.linkPartner(code: partnerCode)
+            statusMessage = "Партнер найден"
         }
     }
 
     func createTestPartner(using service: LocalPairingService) async {
         await run {
-            await saveServerURL(using: service)
+            statusMessage = "Создаем тестового партнера..."
             try await service.createTestPartner()
+            statusMessage = "Тестовый партнер создан"
         }
     }
 
@@ -70,7 +65,11 @@ final class PairingViewModel: ObservableObject {
         do {
             try await operation()
         } catch {
-            errorMessage = "Не удалось выполнить действие. Проверьте адрес сервера и подключение."
+            if let localizedError = error as? LocalizedError, let description = localizedError.errorDescription {
+                errorMessage = description
+            } else {
+                errorMessage = "Не удалось выполнить действие. Проверьте, что iPhone и ПК в одной Wi-Fi сети, а сервер запущен."
+            }
         }
     }
 }

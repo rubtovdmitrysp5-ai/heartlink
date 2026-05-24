@@ -73,6 +73,7 @@ final class AppContainer: ObservableObject {
 
         authenticationService.useLocalUser(currentUser)
         firestoreService.applyLocalPairing(couple: couple, partner: partner)
+        firestoreService.configureLocalBackend(baseURLString: localPairingService.baseURLString, userId: session.userId)
         WidgetSharedStore.update(couple: couple, partner: partner)
     }
 

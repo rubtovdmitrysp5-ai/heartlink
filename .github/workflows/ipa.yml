@@ -49,7 +49,14 @@ jobs:
             /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.example.heartlink" "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist"
 
-          rm -rf "$APP_PATH/PlugIns"
+          if [ -d "$APP_PATH/PlugIns" ]; then
+            WIDGET_PLIST="$(find "$APP_PATH/PlugIns" -name 'Info.plist' -path '*HeartLinkWidgets.appex*' | head -n 1)"
+            if [ -n "$WIDGET_PLIST" ]; then
+              /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.example.heartlink.widgets" "$WIDGET_PLIST" || \
+                /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.example.heartlink.widgets" "$WIDGET_PLIST"
+              /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$WIDGET_PLIST"
+            fi
+          fi
           find "$APP_PATH" -name "_CodeSignature" -type d -prune -exec rm -rf {} +
           find "$APP_PATH" -name "embedded.mobileprovision" -type f -delete
 

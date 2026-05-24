@@ -2,7 +2,7 @@ const crypto = require("crypto");
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { get, init, run } = require("./database");
+const { all, get, init, run } = require("./database");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -45,6 +45,85 @@ async function createUser(displayName = null) {
   );
 
   return user;
+}
+
+function parseJsonRow(row) {
+  return JSON.parse(row.json);
+}
+
+async function upsertJson(table, id, coupleId, json, extra = {}) {
+  if (table === "messages") {
+    await run(
+      "INSERT OR REPLACE INTO messages (id, couple_id, sent_at, json) VALUES (?, ?, ?, ?)",
+      [id, coupleId, json.sentAt || nowISO(), JSON.stringify(json)]
+    );
+    return;
+  }
+
+  if (table === "memories") {
+    await run(
+      "INSERT OR REPLACE INTO memories (id, couple_id, date, json) VALUES (?, ?, ?, ?)",
+      [id, coupleId, json.date || nowISO(), JSON.stringify(json)]
+    );
+    return;
+  }
+
+  if (table === "goals") {
+    await run(
+      "INSERT OR REPLACE INTO goals (id, couple_id, kind, json) VALUES (?, ?, ?, ?)",
+      [id, coupleId, extra.kind || json.kind || "task", JSON.stringify(json)]
+    );
+  }
+}
+
+async function seedGoalsIfNeeded(coupleId) {
+  const existing = await get("SELECT id FROM goals WHERE couple_id = ? LIMIT 1", [coupleId]);
+  if (existing) {
+    return;
+  }
+
+  const goals = [
+    {
+      id: makeId("goal"),
+      coupleId,
+      title: "Путешествие к морю",
+      detail: "Накопить на спокойную поездку на двоих.",
+      kind: "savings",
+      progress: 0.2,
+      targetAmount: 180000,
+      currentAmount: 36000,
+      dueDate: null,
+      isCompleted: false
+    },
+    {
+      id: makeId("goal"),
+      coupleId,
+      title: "Вечер без телефонов",
+      detail: "Приготовить ужин и провести вечер только вдвоем.",
+      kind: "task",
+      progress: 0,
+      targetAmount: null,
+      currentAmount: null,
+      dueDate: null,
+      isCompleted: false
+    },
+    {
+      id: makeId("goal"),
+      coupleId,
+      title: "Общий wishlist",
+      detail: "Добавить идеи подарков и маленьких радостей.",
+      kind: "wishlist",
+      progress: 0,
+      targetAmount: null,
+      currentAmount: null,
+      dueDate: null,
+      isCompleted: false
+    }
+  ];
+
+  for (const goal of goals) {
+    await upsertJson("goals", goal.id, coupleId, goal, { kind: goal.kind });
+  }
 }
 
 async function loadSession(userId) {
@@ -142,6 +221,7 @@ app.post("/api/pairing/link", async (request, response, next) => {
       [coupleId, user.id, partner.id, null, nowISO()]
     );
     await run("UPDATE users SET couple_id = ? WHERE id IN (?, ?)", [coupleId, user.id, partner.id]);
+    await seedGoalsIfNeeded(coupleId);
 
     response.json({ session: await loadSession(user.id) });
   } catch (error) {
@@ -172,6 +252,7 @@ app.post("/api/dev/create-test-partner", async (request, response, next) => {
       [coupleId, user.id, partner.id, null, nowISO()]
     );
     await run("UPDATE users SET couple_id = ? WHERE id IN (?, ?)", [coupleId, user.id, partner.id]);
+    await seedGoalsIfNeeded(coupleId);
 
     response.json({ session: await loadSession(user.id), partnerCode: partner.code });
   } catch (error) {
@@ -207,6 +288,120 @@ app.get("/api/couple/:coupleId", async (request, response, next) => {
       return;
     }
     response.json({ couple });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/couple/:coupleId/data", async (request, response, next) => {
+  try {
+    const coupleId = request.params.coupleId;
+    const couple = await get("SELECT * FROM couples WHERE id = ?", [coupleId]);
+    if (!couple) {
+      sendError(response, 404, "Пара не найдена.");
+      return;
+    }
+
+    await seedGoalsIfNeeded(coupleId);
+
+    const messages = await all("SELECT json FROM messages WHERE couple_id = ? ORDER BY sent_at ASC", [coupleId]);
+    const memories = await all("SELECT json FROM memories WHERE couple_id = ? ORDER BY date DESC", [coupleId]);
+    const goals = await all("SELECT json FROM goals WHERE couple_id = ? ORDER BY kind ASC", [coupleId]);
+    const firstUser = await get("SELECT id, display_name, current_mood FROM users WHERE id = ?", [couple.first_user_id]);
+    const secondUser = await get("SELECT id, display_name, current_mood FROM users WHERE id = ?", [couple.second_user_id]);
+
+    response.json({
+      messages: messages.map(parseJsonRow),
+      memories: memories.map(parseJsonRow),
+      goals: goals.map(parseJsonRow),
+      users: [firstUser, secondUser].filter(Boolean).map((user) => ({
+        id: user.id,
+        displayName: user.display_name,
+        currentMood: user.current_mood || "happy"
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/messages", async (request, response, next) => {
+  try {
+    const { message } = request.body;
+    if (!message?.id || !message?.coupleId) {
+      sendError(response, 400, "Сообщение заполнено неверно.");
+      return;
+    }
+    await upsertJson("messages", message.id, message.coupleId, message);
+    response.json({ message });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/messages/:messageId/reactions", async (request, response, next) => {
+  try {
+    const row = await get("SELECT json FROM messages WHERE id = ?", [request.params.messageId]);
+    if (!row) {
+      sendError(response, 404, "Сообщение не найдено.");
+      return;
+    }
+
+    const message = parseJsonRow(row);
+    message.reactions = [...(message.reactions || []), request.body.reaction];
+    await upsertJson("messages", message.id, message.coupleId, message);
+    response.json({ message });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/memories", async (request, response, next) => {
+  try {
+    const { memory } = request.body;
+    if (!memory?.id || !memory?.coupleId) {
+      sendError(response, 400, "Воспоминание заполнено неверно.");
+      return;
+    }
+    await upsertJson("memories", memory.id, memory.coupleId, memory);
+    response.json({ memory });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/goals/:goalId", async (request, response, next) => {
+  try {
+    const row = await get("SELECT json FROM goals WHERE id = ?", [request.params.goalId]);
+    if (!row) {
+      sendError(response, 404, "Цель не найдена.");
+      return;
+    }
+
+    const goal = {
+      ...parseJsonRow(row),
+      progress: request.body.progress,
+      currentAmount: request.body.currentAmount,
+      isCompleted: request.body.isCompleted
+    };
+    await upsertJson("goals", goal.id, goal.coupleId, goal, { kind: goal.kind });
+    response.json({ goal });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/mood", async (request, response, next) => {
+  try {
+    const { userId, mood } = request.body;
+    const user = await get("SELECT * FROM users WHERE id = ?", [userId]);
+    if (!user) {
+      sendError(response, 404, "Пользователь не найден.");
+      return;
+    }
+
+    await run("UPDATE users SET current_mood = ? WHERE id = ?", [mood || "happy", userId]);
+    response.json({ session: await loadSession(userId) });
   } catch (error) {
     next(error);
   }

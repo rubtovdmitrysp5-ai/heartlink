@@ -31,6 +31,28 @@ function get(sql, params = []) {
   });
 }
 
+function all(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (error, rows) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(rows);
+    });
+  });
+}
+
+async function addColumnIfMissing(sql) {
+  try {
+    await run(sql);
+  } catch (error) {
+    if (!String(error.message || "").includes("duplicate column name")) {
+      throw error;
+    }
+  }
+}
+
 async function init() {
   await run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -42,6 +64,8 @@ async function init() {
     )
   `);
 
+  await addColumnIfMissing("ALTER TABLE users ADD COLUMN current_mood TEXT DEFAULT 'happy'");
+
   await run(`
     CREATE TABLE IF NOT EXISTS couples (
       id TEXT PRIMARY KEY,
@@ -51,9 +75,37 @@ async function init() {
       created_at TEXT NOT NULL
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      couple_id TEXT NOT NULL,
+      sent_at TEXT NOT NULL,
+      json TEXT NOT NULL
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS memories (
+      id TEXT PRIMARY KEY,
+      couple_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      json TEXT NOT NULL
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS goals (
+      id TEXT PRIMARY KEY,
+      couple_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      json TEXT NOT NULL
+    )
+  `);
 }
 
 module.exports = {
+  all,
   db,
   get,
   init,

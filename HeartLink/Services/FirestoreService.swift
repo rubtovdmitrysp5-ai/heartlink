@@ -6,6 +6,8 @@ import FirebaseFirestore
 final class FirestoreService: ObservableObject {
     private let isFirebaseEnabled: Bool
     private var listeners: [ListenerRegistration] = []
+    private var localBaseURLString: String?
+    private var localUserId: String?
 
     @Published var couple: Couple = SampleDataStore.couple
     @Published var partner: UserProfile = SampleDataStore.partner
@@ -18,9 +20,44 @@ final class FirestoreService: ObservableObject {
         self.isFirebaseEnabled = isFirebaseEnabled
     }
 
+    func configureLocalBackend(baseURLString: String, userId: String) {
+        guard !isFirebaseEnabled else { return }
+        localBaseURLString = baseURLString
+        localUserId = userId
+        Task {
+            await refreshLocalCoupleData()
+        }
+    }
+
     func applyLocalPairing(couple: Couple, partner: UserProfile) {
         self.couple = couple
         self.partner = partner
+    }
+
+    func refreshLocalCoupleData() async {
+        guard !isFirebaseEnabled, localBaseURLString != nil else { return }
+
+        do {
+            let response: LocalCoupleDataResponse = try await localRequest(
+                path: "/api/couple/\(couple.id)/data",
+                method: "GET"
+            )
+
+            messages = response.messages
+            memories = response.memories
+            goals = response.goals
+
+            if let partnerSnapshot = response.users.first(where: { $0.id == partner.id }) {
+                partner.currentMood = MoodStatus(rawValue: partnerSnapshot.currentMood) ?? partner.currentMood
+                if let displayName = partnerSnapshot.displayName, !displayName.isEmpty {
+                    partner.displayName = displayName
+                }
+            }
+        } catch {
+            if goals.isEmpty {
+                goals = SampleDataStore.goals
+            }
+        }
     }
 
     func start(user: UserProfile) {
@@ -33,7 +70,14 @@ final class FirestoreService: ObservableObject {
     }
 
     func updateMood(_ mood: MoodStatus, userId: String) async {
-        guard isFirebaseEnabled else { return }
+        guard isFirebaseEnabled else {
+            let _: PairingSessionResponse? = try? await localRequest(
+                path: "/api/mood",
+                method: "POST",
+                body: LocalMoodRequest(userId: userId, mood: mood.rawValue)
+            )
+            return
+        }
         try? await Firestore.firestore().collection("users").document(userId).setData([
             "currentMood": mood.rawValue,
             "updatedAt": Timestamp(date: .now)
@@ -96,8 +140,16 @@ final class FirestoreService: ObservableObject {
 
     func addReaction(_ emoji: String, to message: ChatMessage, authorId: String) async {
         guard isFirebaseEnabled else {
-            guard let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
-            messages[index].reactions.append(ChatReaction(id: UUID().uuidString, emoji: emoji, authorId: authorId))
+            let reaction = ChatReaction(id: UUID().uuidString, emoji: emoji, authorId: authorId)
+            if let response: LocalMessageResponse = try? await localRequest(
+                path: "/api/messages/\(message.id)/reactions",
+                method: "POST",
+                body: LocalReactionRequest(reaction: reaction)
+            ), let index = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[index] = response.message
+            } else if let index = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[index].reactions.append(reaction)
+            }
             return
         }
 
@@ -130,7 +182,15 @@ final class FirestoreService: ObservableObject {
         )
 
         guard isFirebaseEnabled else {
-            memories.insert(memory, at: 0)
+            if let response: LocalMemoryResponse = try? await localRequest(
+                path: "/api/memories",
+                method: "POST",
+                body: LocalMemoryRequest(memory: memory)
+            ) {
+                memories.insert(response.memory, at: 0)
+            } else {
+                memories.insert(memory, at: 0)
+            }
             return
         }
 
@@ -149,6 +209,20 @@ final class FirestoreService: ObservableObject {
             guard let index = goals.firstIndex(where: { $0.id == goal.id }) else { return }
             goals[index].progress = clamped
             goals[index].isCompleted = clamped >= 1
+            if let targetAmount = goals[index].targetAmount {
+                goals[index].currentAmount = targetAmount * clamped
+            }
+            if let response: LocalGoalResponse = try? await localRequest(
+                path: "/api/goals/\(goal.id)",
+                method: "PATCH",
+                body: LocalGoalProgressRequest(
+                    progress: goals[index].progress,
+                    currentAmount: goals[index].currentAmount,
+                    isCompleted: goals[index].isCompleted
+                )
+            ) {
+                goals[index] = response.goal
+            }
             return
         }
 
@@ -313,9 +387,112 @@ final class FirestoreService: ObservableObject {
                 .document(message.id)
                 .setData(message.dictionary)
         } else {
-            messages.append(message)
+            if let response: LocalMessageResponse = try? await localRequest(
+                path: "/api/messages",
+                method: "POST",
+                body: LocalMessageRequest(message: message)
+            ) {
+                messages.append(response.message)
+            } else {
+                messages.append(message)
+            }
         }
     }
+
+    private func localRequest<Response: Decodable>(
+        path: String,
+        method: String
+    ) async throws -> Response {
+        try await localRequest(path: path, method: method, body: Optional<EmptyRequest>.none)
+    }
+
+    private func localRequest<Response: Decodable, Body: Encodable>(
+        path: String,
+        method: String,
+        body: Body?
+    ) async throws -> Response {
+        guard let localBaseURLString, let baseURL = URL(string: localBaseURLString), let url = URL(string: path, relativeTo: baseURL) else {
+            throw URLError(.badURL)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 8
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        if let body {
+            request.httpBody = try Self.localEncoder.encode(body)
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
+        return try Self.localDecoder.decode(Response.self, from: data)
+    }
+
+    private static let localDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+
+    private static let localEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+}
+
+private struct EmptyRequest: Encodable {}
+
+private struct LocalCoupleDataResponse: Decodable {
+    let messages: [ChatMessage]
+    let memories: [Memory]
+    let goals: [CoupleGoal]
+    let users: [LocalUserSnapshot]
+}
+
+private struct LocalUserSnapshot: Decodable {
+    let id: String
+    let displayName: String?
+    let currentMood: String
+}
+
+private struct LocalMessageRequest: Encodable {
+    let message: ChatMessage
+}
+
+private struct LocalMessageResponse: Decodable {
+    let message: ChatMessage
+}
+
+private struct LocalReactionRequest: Encodable {
+    let reaction: ChatReaction
+}
+
+private struct LocalMemoryRequest: Encodable {
+    let memory: Memory
+}
+
+private struct LocalMemoryResponse: Decodable {
+    let memory: Memory
+}
+
+private struct LocalGoalProgressRequest: Encodable {
+    let progress: Double
+    let currentAmount: Double?
+    let isCompleted: Bool
+}
+
+private struct LocalGoalResponse: Decodable {
+    let goal: CoupleGoal
+}
+
+private struct LocalMoodRequest: Encodable {
+    let userId: String
+    let mood: String
 }
 
 private extension Couple {

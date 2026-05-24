@@ -179,6 +179,9 @@ final class LocalPairingService: ObservableObject {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            if let serverError = try? Self.decoder.decode(LocalPairingErrorResponse.self, from: data) {
+                throw LocalPairingError.serverMessage(serverError.error.message)
+            }
             throw URLError(.badServerResponse)
         }
 
@@ -216,4 +219,23 @@ final class LocalPairingService: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }()
+}
+
+private struct LocalPairingErrorResponse: Decodable {
+    let error: LocalPairingErrorBody
+}
+
+private struct LocalPairingErrorBody: Decodable {
+    let message: String
+}
+
+enum LocalPairingError: LocalizedError {
+    case serverMessage(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .serverMessage(let message):
+            return message
+        }
+    }
 }

@@ -35,6 +35,7 @@ struct PairingFlowView: View {
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.red)
                             .multilineTextAlignment(.center)
+                            .padding(.horizontal, 8)
                     }
                 }
                 .padding(18)
@@ -79,7 +80,11 @@ private struct CodePairingCard: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 16) {
-                SectionTitle("Ваш персональный код", subtitle: "Партнер может ввести его у себя", systemImage: "link.badge.plus")
+                SectionTitle(
+                    "Ваш персональный код",
+                    subtitle: "Партнер может ввести его у себя",
+                    systemImage: "link.badge.plus"
+                )
 
                 Text(session.personalCode)
                     .font(.system(size: 42, weight: .heavy, design: .rounded))
@@ -89,30 +94,13 @@ private struct CodePairingCard: View {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     .textSelection(.enabled)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Адрес сервера на ПК")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("http://192.168.1.45:3000", text: $viewModel.serverURL)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.URL)
-                        .padding(12)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .onSubmit {
-                            Task { await viewModel.saveServerURL(using: pairingService) }
-                        }
-                    Text(pairingService.isServerReachable ? "Сервер подключен или используется сохраненная сессия." : "Сервер недоступен. Можно продолжить в тестовом режиме.")
-                        .font(.caption)
-                        .foregroundStyle(pairingService.isServerReachable ? Color.secondary : Color.orange)
-                }
+                PairingStatusPill(
+                    text: viewModel.statusMessage,
+                    isWarning: !pairingService.isServerReachable
+                )
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Код партнера")
-                        .font(.subheadline.weight(.semibold))
-                    TextField("HL-123456", text: $viewModel.partnerCode)
-                        .textInputAutocapitalization(.characters)
-                        .padding(12)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
+                PairingTextField(title: "Код партнера", placeholder: "HL-123456", text: $viewModel.partnerCode)
+                    .textInputAutocapitalization(.characters)
 
                 PrimaryActionButton(title: "Связать по коду", systemImage: "heart.fill", isLoading: viewModel.isLoading) {
                     Task { await viewModel.linkPartner(using: pairingService) }
@@ -128,8 +116,34 @@ private struct CodePairingCard: View {
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
                 .buttonStyle(.plain)
+
+                Button(role: .destructive) {
+                    pairingService.reset()
+                    Task { await viewModel.prepare(using: pairingService) }
+                } label: {
+                    Label("Получить новый код", systemImage: "arrow.clockwise")
+                        .font(.footnote.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct PairingStatusPill: View {
+    let text: String
+    let isWarning: Bool
+
+    var body: some View {
+        Label(text, systemImage: isWarning ? "wifi.exclamationmark" : "checkmark.circle.fill")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(isWarning ? .orange : .green)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -141,7 +155,11 @@ private struct ProfileSetupCard: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 16) {
-                SectionTitle("Расскажите о вас", subtitle: "Эти данные увидит только ваша пара", systemImage: "person.2.fill")
+                SectionTitle(
+                    "Расскажите о вас",
+                    subtitle: "Эти данные увидит только ваша пара",
+                    systemImage: "person.2.fill"
+                )
 
                 if let partnerName = session.partnerName {
                     Label("Партнер найден: \(partnerName)", systemImage: "checkmark.seal.fill")

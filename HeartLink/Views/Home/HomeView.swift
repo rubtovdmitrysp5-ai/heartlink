@@ -7,7 +7,9 @@ struct HomeView: View {
     @EnvironmentObject private var router: RouterPath
     @EnvironmentObject private var notificationService: NotificationService
     @EnvironmentObject private var securityService: SecurityService
+    @EnvironmentObject private var localPairingService: LocalPairingService
     @StateObject private var viewModel = HomeViewModel()
+    @State private var showsResetConfirmation = false
 
     var body: some View {
         ZStack {
@@ -15,10 +17,7 @@ struct HomeView: View {
 
             ScrollView {
                 VStack(spacing: 18) {
-                    HeaderView(
-                        currentUser: currentUser,
-                        partner: firestoreService.partner
-                    )
+                    HeaderView(currentUser: currentUser, partner: firestoreService.partner)
 
                     RelationshipCounterCard(
                         days: viewModel.animatedDays,
@@ -29,7 +28,6 @@ struct HomeView: View {
                     }
 
                     AnniversaryCard(couple: firestoreService.couple)
-
                     MoodSnapshotCard(partner: firestoreService.partner)
 
                     QuickActionsCard {
@@ -41,6 +39,8 @@ struct HomeView: View {
                         router.present(.settings)
                     } lock: {
                         securityService.lock()
+                    } resetPairing: {
+                        showsResetConfirmation = true
                     }
 
                     RecentHighlightsCard(
@@ -55,6 +55,14 @@ struct HomeView: View {
         }
         .navigationTitle("Главная")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("Начать заново?", isPresented: $showsResetConfirmation, titleVisibility: .visible) {
+            Button("Сбросить пару", role: .destructive) {
+                localPairingService.reset()
+            }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Приложение вернется к экрану кода. Данные на локальном сервере останутся.")
+        }
     }
 }
 
@@ -78,7 +86,7 @@ private struct HeaderView: View {
                 AvatarCircle(name: currentUser.displayName, color: .pink)
                 AvatarCircle(name: partner.displayName, color: .indigo)
             }
-            .accessibilityLabel("Вы и партнёр")
+            .accessibilityLabel("Вы и партнер")
         }
     }
 }
@@ -206,6 +214,7 @@ private struct QuickActionsCard: View {
     let enableNotifications: () -> Void
     let openSecurity: () -> Void
     let lock: () -> Void
+    let resetPairing: () -> Void
 
     var body: some View {
         GlassCard {
@@ -216,6 +225,7 @@ private struct QuickActionsCard: View {
                     ActionIconButton(title: "Уведомления", systemImage: "bell.badge", action: enableNotifications)
                     ActionIconButton(title: "Защита", systemImage: "lock.shield", action: openSecurity)
                     ActionIconButton(title: "Скрыть", systemImage: "eye.slash", action: lock)
+                    ActionIconButton(title: "Сброс", systemImage: "arrow.counterclockwise", action: resetPairing)
                 }
             }
         }
@@ -235,7 +245,7 @@ private struct ActionIconButton: View {
                 Text(title)
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .minimumScaleFactor(0.65)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -293,5 +303,6 @@ private struct RecentHighlightsCard: View {
             .environmentObject(RouterPath())
             .environmentObject(NotificationService(isFirebaseEnabled: false))
             .environmentObject(SecurityService())
+            .environmentObject(LocalPairingService())
     }
 }
