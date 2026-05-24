@@ -10,10 +10,11 @@ final class LocalPairingService: ObservableObject {
     private let defaults: UserDefaults
     private let sessionKey = "localPairingSession"
     private let baseURLKey = "localPairingBaseURL"
+    private let defaultBaseURLString = "http://192.168.100.4:3000"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        self.baseURLString = defaults.string(forKey: baseURLKey) ?? "http://127.0.0.1:3000"
+        self.baseURLString = defaults.string(forKey: baseURLKey) ?? defaultBaseURLString
         self.session = Self.decodeSession(from: defaults.data(forKey: sessionKey))
     }
 

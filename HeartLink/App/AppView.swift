@@ -47,6 +47,15 @@ struct AppView: View {
                 securityService.lock()
             }
         }
+        .onChange(of: localPairingService.session) { _, session in
+            guard let session, session.setupComplete else { return }
+            container.applyLocalPairing(session)
+        }
+        .task {
+            if let session = localPairingService.session, session.setupComplete {
+                container.applyLocalPairing(session)
+            }
+        }
     }
 }
 
