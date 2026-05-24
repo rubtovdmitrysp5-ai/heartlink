@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ChatView: View {
     let currentUser: UserProfile
+    var onClose: () -> Void = {}
 
     @EnvironmentObject private var firestoreService: FirestoreService
     @EnvironmentObject private var storageService: StorageService
@@ -61,6 +62,15 @@ struct ChatView: View {
         }
         .navigationTitle("Личный чат")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    onClose()
+                } label: {
+                    Label("Закрыть", systemImage: "chevron.left")
+                }
+            }
+        }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
 

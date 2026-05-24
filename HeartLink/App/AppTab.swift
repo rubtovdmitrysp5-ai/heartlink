@@ -11,12 +11,14 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var id: String { rawValue }
 
     @ViewBuilder
-    func makeContentView(currentUser: UserProfile) -> some View {
+    func makeContentView(currentUser: UserProfile, selectedTab: Binding<AppTab>) -> some View {
         switch self {
         case .home:
             HomeView(currentUser: currentUser)
         case .chat:
-            ChatView(currentUser: currentUser)
+            ChatView(currentUser: currentUser) {
+                selectedTab.wrappedValue = .home
+            }
         case .memories:
             MemoriesView(currentUser: currentUser)
         case .goals:
@@ -46,4 +48,3 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
         }
     }
 }
-

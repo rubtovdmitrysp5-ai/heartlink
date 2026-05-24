@@ -10,7 +10,7 @@ struct RootTabsView: View {
         TabView(selection: $selectedTab) {
             ForEach(AppTab.allCases) { tab in
                 NavigationStack(path: tabRouter.binding(for: tab)) {
-                    tab.makeContentView(currentUser: currentUser)
+                    tab.makeContentView(currentUser: currentUser, selectedTab: $selectedTab)
                         .withAppRouter()
                         .withSheetDestinations(sheet: Binding(
                             get: { tabRouter.router(for: tab).presentedSheet },
