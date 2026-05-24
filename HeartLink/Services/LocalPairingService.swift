@@ -35,18 +35,16 @@ final class LocalPairingService: ObservableObject {
 
     func startSession() async {
         if let session {
-            await refreshSession(userId: session.userId)
-            return
+            if session.userId.hasPrefix("offline-") {
+                reset()
+            } else {
+                await refreshSession(userId: session.userId)
+                return
+            }
         }
 
         do {
-            let response: PairingStartResponse = try await request(
-                path: "/api/session/start",
-                method: "POST",
-                body: ["deviceName": "iPhone"]
-            )
-            apply(response.session)
-            isServerReachable = true
+            try await createServerSession()
         } catch {
             isServerReachable = false
             apply(Self.makeOfflineSession())
@@ -59,11 +57,15 @@ final class LocalPairingService: ObservableObject {
             apply(response.session)
             isServerReachable = true
         } catch {
+            if userId.hasPrefix("offline-") {
+                reset()
+            }
             isServerReachable = false
         }
     }
 
     func linkPartner(code: String) async throws {
+        try await ensureServerSession()
         guard let userId = session?.userId else { return }
         let response: PairingSessionResponse = try await request(
             path: "/api/pairing/link",
@@ -78,6 +80,7 @@ final class LocalPairingService: ObservableObject {
     }
 
     func createTestPartner() async throws {
+        try await ensureServerSession()
         guard let userId = session?.userId else { return }
 
         do {
@@ -130,6 +133,23 @@ final class LocalPairingService: ObservableObject {
     func reset() {
         session = nil
         defaults.removeObject(forKey: sessionKey)
+    }
+
+    private func ensureServerSession() async throws {
+        if session?.userId.hasPrefix("offline-") == true || session == nil {
+            reset()
+            try await createServerSession()
+        }
+    }
+
+    private func createServerSession() async throws {
+        let response: PairingStartResponse = try await request(
+            path: "/api/session/start",
+            method: "POST",
+            body: ["deviceName": "iPhone"]
+        )
+        apply(response.session)
+        isServerReachable = true
     }
 
     private func apply(_ session: LocalPairingSession) {
