@@ -30,6 +30,7 @@ struct LoveGame: Identifiable, Codable, Hashable {
     var prompt: String
     var options: [String]
     var completedToday: Bool
+    var answers: [LoveGameAnswer]?
 
     static let samples: [LoveGame] = [
         LoveGame(
@@ -37,22 +38,31 @@ struct LoveGame: Identifiable, Codable, Hashable {
             kind: .dailyQuestion,
             prompt: "Какой момент этой недели ты хочешь запомнить вместе?",
             options: [],
-            completedToday: false
+            completedToday: false,
+            answers: []
         ),
         LoveGame(
             id: "game-2",
             kind: .partnerQuiz,
             prompt: "Какой десерт партнёр выберет первым?",
             options: ["Тирамису", "Чизкейк", "Мороженое", "Шоколадный торт"],
-            completedToday: false
+            completedToday: false,
+            answers: []
         ),
         LoveGame(
             id: "game-3",
             kind: .romanticTask,
             prompt: "Отправь голосовое сообщение с одной причиной, почему ты любишь партнёра.",
             options: [],
-            completedToday: true
+            completedToday: true,
+            answers: []
         )
     ]
 }
 
+struct LoveGameAnswer: Identifiable, Codable, Hashable {
+    let id: String
+    var userId: String
+    var text: String
+    var createdAt: Date
+}

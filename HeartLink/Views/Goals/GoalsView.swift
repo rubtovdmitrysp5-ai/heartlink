@@ -13,16 +13,31 @@ struct GoalsView: View {
                 VStack(spacing: 16) {
                     SectionTitle("Цели пары", subtitle: "Задачи, желания и накопления", systemImage: "target")
 
-                    ForEach(GoalKind.allCases) { kind in
-                        let goals = firestoreService.goals.filter { $0.kind == kind }
-                        if !goals.isEmpty {
-                            GoalGroupSection(kind: kind, goals: goals) { goal in
-                                router.navigate(to: .goal(goal.id))
-                            } increase: { goal in
-                                Task {
-                                    await viewModel.increaseProgress(for: goal, using: firestoreService)
+                    if firestoreService.goals.isEmpty {
+                        EmptyStateView(
+                            title: "Целей пока нет",
+                            subtitle: "Создайте первую общую цель: свидание, поездку или список желаний.",
+                            systemImage: "target"
+                        )
+                    } else {
+                        ForEach(GoalKind.allCases) { kind in
+                            let goals = firestoreService.goals.filter { $0.kind == kind && !$0.isCompleted }
+                            if !goals.isEmpty {
+                                GoalGroupSection(kind: kind, goals: goals) { goal in
+                                    router.navigate(to: .goal(goal.id))
+                                } increase: { goal in
+                                    Task {
+                                        await viewModel.increaseProgress(for: goal, using: firestoreService)
+                                    }
                                 }
                             }
+                        }
+
+                        let completedGoals = firestoreService.goals.filter(\.isCompleted)
+                        if !completedGoals.isEmpty {
+                            GoalGroupSection(kind: .task, title: "Завершено", goals: completedGoals) { goal in
+                                router.navigate(to: .goal(goal.id))
+                            } increase: { _ in }
                         }
                     }
                 }
@@ -47,6 +62,7 @@ struct GoalsView: View {
 
 private struct GoalGroupSection: View {
     let kind: GoalKind
+    var title: String?
     let goals: [CoupleGoal]
     let open: (CoupleGoal) -> Void
     let increase: (CoupleGoal) -> Void
@@ -54,7 +70,7 @@ private struct GoalGroupSection: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 14) {
-                SectionTitle(kind.title, subtitle: nil, systemImage: kind.symbolName)
+                SectionTitle(title ?? kind.title, subtitle: nil, systemImage: title == nil ? kind.symbolName : "checkmark.seal")
 
                 ForEach(goals) { goal in
                     GoalRow(
@@ -79,27 +95,29 @@ private struct GoalRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(goal.title)
                         .font(.headline)
-                    Text(goal.detail)
+                    Text(goal.detail.isEmpty ? "Без описания" : goal.detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
                 Spacer()
-                Button(action: increase) {
-                    Image(systemName: "plus")
-                        .font(.caption.bold())
-                        .frame(width: 30, height: 30)
-                        .background(.pink.opacity(0.14), in: Circle())
+                if !goal.isCompleted {
+                    Button(action: increase) {
+                        Image(systemName: "plus")
+                            .font(.caption.bold())
+                            .frame(width: 30, height: 30)
+                            .background(.pink.opacity(0.14), in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Добавить прогресс")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Добавить прогресс")
             }
 
             ProgressView(value: goal.progress)
-                .tint(.pink)
+                .tint(goal.isCompleted ? .green : .pink)
 
             HStack {
-                Text("\(Int(goal.progress * 100))%")
+                Text(goal.isCompleted ? "Выполнено" : "\(Int(goal.progress * 100))%")
                     .font(.caption.weight(.semibold))
                 Spacer()
                 if let current = goal.currentAmount, let target = goal.targetAmount {
@@ -119,6 +137,8 @@ struct GoalDetailView: View {
     let goalId: String
     @EnvironmentObject private var firestoreService: FirestoreService
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = GoalsViewModel()
+    @State private var isEditing = false
 
     private var goal: CoupleGoal? {
         firestoreService.goals.first { $0.id == goalId }
@@ -129,34 +149,60 @@ struct GoalDetailView: View {
             RomanticBackground()
 
             if let goal {
-                VStack(spacing: 18) {
-                    GlassCard {
-                        VStack(spacing: 16) {
-                            Image(systemName: goal.kind.symbolName)
-                                .font(.system(size: 54, weight: .semibold))
-                                .foregroundStyle(.pink)
-                                .frame(width: 104, height: 104)
-                                .background(.pink.opacity(0.12), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+                ScrollView {
+                    VStack(spacing: 18) {
+                        GlassCard {
+                            VStack(spacing: 16) {
+                                Image(systemName: goal.kind.symbolName)
+                                    .font(.system(size: 54, weight: .semibold))
+                                    .foregroundStyle(goal.isCompleted ? .green : .pink)
+                                    .frame(width: 104, height: 104)
+                                    .background((goal.isCompleted ? Color.green : Color.pink).opacity(0.12), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
 
-                            Text(goal.title)
-                                .font(.title.bold())
-                                .multilineTextAlignment(.center)
-                            Text(goal.detail)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                            ProgressView(value: goal.progress)
-                                .tint(.pink)
-                            Text("\(Int(goal.progress * 100))% выполнено")
-                                .font(.headline)
+                                Text(goal.title)
+                                    .font(.title.bold())
+                                    .multilineTextAlignment(.center)
+                                Text(goal.detail.isEmpty ? "Без описания" : goal.detail)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                ProgressView(value: goal.progress)
+                                    .tint(goal.isCompleted ? .green : .pink)
+                                Text(goal.isCompleted ? "Цель выполнена" : "\(Int(goal.progress * 100))% выполнено")
+                                    .font(.headline)
+                            }
+                            .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity)
+
+                        if goal.kind == .savings, !goal.isCompleted {
+                            GlassCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Пополнить накопление")
+                                        .font(.headline)
+                                    TextField("Сумма", text: $viewModel.amountToAdd)
+                                        .keyboardType(.decimalPad)
+                                        .heartLinkGoalField()
+                                    PrimaryActionButton(title: "Добавить сумму", systemImage: "plus", isLoading: viewModel.isSaving) {
+                                        Task {
+                                            await viewModel.addAmount(to: goal, using: firestoreService)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if !goal.isCompleted {
+                            PrimaryActionButton(title: "Отметить выполненной", systemImage: "checkmark.seal.fill") {
+                                Task {
+                                    await firestoreService.completeGoal(goal)
+                                }
+                            }
+                        }
                     }
                     .padding(16)
-                    Spacer()
                 }
             } else {
-                EmptyStateView(title: "Цель не найдена", subtitle: "Она могла быть завершена или еще загружается.", systemImage: "target")
+                EmptyStateView(title: "Цель не найдена", subtitle: "Она могла быть завершена или ещё загружается.", systemImage: "target")
                     .padding(16)
             }
         }
@@ -164,7 +210,14 @@ struct GoalDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let goal {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        isEditing = true
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .accessibilityLabel("Редактировать цель")
+
                     Button(role: .destructive) {
                         Task {
                             await firestoreService.deleteGoal(goal)
@@ -177,6 +230,22 @@ struct GoalDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $isEditing) {
+            if let goal {
+                EditGoalView(goal: goal)
+                    .presentationDetents([.medium, .large])
+            }
+        }
+        .alert("Ошибка", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("Понятно", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Не удалось выполнить действие.")
+        }
     }
 }
 
@@ -187,48 +256,104 @@ struct AddGoalView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                RomanticBackground()
+            GoalEditorContent(
+                viewModel: viewModel,
+                title: "Новая цель",
+                saveTitle: "Сохранить цель",
+                save: {
+                    if await viewModel.createGoal(using: firestoreService) {
+                        dismiss()
+                    }
+                },
+                close: { dismiss() }
+            )
+        }
+    }
+}
 
-                ScrollView {
-                    VStack(spacing: 14) {
-                        Picker("Тип", selection: $viewModel.kind) {
-                            ForEach(GoalKind.allCases) { kind in
-                                Text(kind.title).tag(kind)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+private struct EditGoalView: View {
+    let goal: CoupleGoal
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @StateObject private var viewModel = GoalsViewModel()
 
-                        TextField("Название", text: $viewModel.title)
-                            .heartLinkGoalField()
-                        TextField("Описание", text: $viewModel.detail, axis: .vertical)
-                            .lineLimit(3...5)
-                            .heartLinkGoalField()
+    var body: some View {
+        NavigationStack {
+            GoalEditorContent(
+                viewModel: viewModel,
+                title: "Редактировать цель",
+                saveTitle: "Обновить цель",
+                save: {
+                    if await viewModel.updateGoal(goal, using: firestoreService) {
+                        dismiss()
+                    }
+                },
+                close: { dismiss() }
+            )
+            .onAppear {
+                if viewModel.title.isEmpty {
+                    viewModel.configure(with: goal)
+                }
+            }
+        }
+    }
+}
 
-                        if viewModel.kind == .savings {
-                            TextField("Сумма цели", text: $viewModel.targetAmount)
-                                .keyboardType(.decimalPad)
-                                .heartLinkGoalField()
-                        }
+private struct GoalEditorContent: View {
+    @ObservedObject var viewModel: GoalsViewModel
+    let title: String
+    let saveTitle: String
+    let save: () async -> Void
+    let close: () -> Void
 
-                        PrimaryActionButton(title: "Сохранить цель", systemImage: "target", isLoading: viewModel.isSaving) {
-                            Task {
-                                if await viewModel.createGoal(using: firestoreService) {
-                                    dismiss()
-                                }
-                            }
+    var body: some View {
+        ZStack {
+            RomanticBackground()
+
+            ScrollView {
+                VStack(spacing: 14) {
+                    Picker("Тип", selection: $viewModel.kind) {
+                        ForEach(GoalKind.allCases) { kind in
+                            Text(kind.title).tag(kind)
                         }
                     }
-                    .padding(16)
+                    .pickerStyle(.segmented)
+
+                    TextField("Название", text: $viewModel.title)
+                        .heartLinkGoalField()
+                    TextField("Описание", text: $viewModel.detail, axis: .vertical)
+                        .lineLimit(3...5)
+                        .heartLinkGoalField()
+
+                    if viewModel.kind == .savings {
+                        TextField("Сумма цели", text: $viewModel.targetAmount)
+                            .keyboardType(.decimalPad)
+                            .heartLinkGoalField()
+                    }
+
+                    PrimaryActionButton(title: saveTitle, systemImage: "target", isLoading: viewModel.isSaving) {
+                        Task { await save() }
+                    }
                 }
+                .padding(16)
             }
-            .navigationTitle("Новая цель")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
-                }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Закрыть", action: close)
             }
+        }
+        .alert("Ошибка", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("Понятно", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Не удалось выполнить действие.")
         }
     }
 }

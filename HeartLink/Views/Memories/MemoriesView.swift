@@ -16,15 +16,23 @@ struct MemoriesView: View {
                 VStack(spacing: 18) {
                     SectionTitle("Воспоминания", subtitle: "Ваш общий таймлайн", systemImage: "photo.stack")
 
-                    MemoryMapCard(memories: firestoreService.memories)
+                    if firestoreService.memories.isEmpty {
+                        EmptyStateView(
+                            title: "Пока нет воспоминаний",
+                            subtitle: "Добавьте первое фото, место или маленькую историю вашего дня.",
+                            systemImage: "photo.badge.plus"
+                        )
+                    } else {
+                        MemoryMapCard(memories: firestoreService.memories)
 
-                    ForEach(firestoreService.memories) { memory in
-                        Button {
-                            router.navigate(to: .memory(memory.id))
-                        } label: {
-                            MemoryTimelineCard(memory: memory)
+                        ForEach(firestoreService.memories) { memory in
+                            Button {
+                                router.navigate(to: .memory(memory.id))
+                            } label: {
+                                MemoryTimelineCard(memory: memory)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -117,6 +125,8 @@ struct MemoryDetailView: View {
     let memoryId: String
     @EnvironmentObject private var firestoreService: FirestoreService
     @Environment(\.dismiss) private var dismiss
+    @State private var isEditing = false
+    @State private var openedImage: MemoryImageItem?
 
     private var memory: Memory? {
         firestoreService.memories.first { $0.id == memoryId }
@@ -128,19 +138,29 @@ struct MemoryDetailView: View {
             if let memory {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
-                        MemoryHeroImage(url: memory.imageURL)
-                            .frame(height: 320)
+                        Button {
+                            if let url = memory.imageURL {
+                                openedImage = MemoryImageItem(url: url)
+                            }
+                        } label: {
+                            MemoryHeroImage(url: memory.imageURL)
+                                .frame(height: 320)
+                        }
+                        .buttonStyle(.plain)
 
                         GlassCard {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text(memory.title)
                                     .font(.title.bold())
-                                Text(memory.note)
+                                Text(memory.note.isEmpty ? "Без описания" : memory.note)
                                     .font(.body)
                                     .foregroundStyle(.secondary)
                                 Label(memory.locationName, systemImage: "mappin.and.ellipse")
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(.pink)
+                                Label(memory.date.heartLinkShortDate, systemImage: "calendar")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.secondary)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
@@ -156,7 +176,14 @@ struct MemoryDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if let memory {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        isEditing = true
+                    } label: {
+                        Image(systemName: "pencil")
+                    }
+                    .accessibilityLabel("Редактировать воспоминание")
+
                     Button(role: .destructive) {
                         Task {
                             await firestoreService.deleteMemory(memory)
@@ -165,11 +192,25 @@ struct MemoryDetailView: View {
                     } label: {
                         Image(systemName: "trash")
                     }
-                    .accessibilityLabel("������� ������������")
+                    .accessibilityLabel("Удалить воспоминание")
                 }
             }
         }
+        .sheet(isPresented: $isEditing) {
+            if let memory {
+                EditMemoryView(memory: memory)
+                    .presentationDetents([.medium, .large])
+            }
+        }
+        .fullScreenCover(item: $openedImage) { item in
+            MemoryFullScreenPhotoView(url: item.url)
+        }
     }
+}
+
+private struct MemoryImageItem: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
 }
 
 private struct MemoryThumbnail: View {
@@ -235,25 +276,92 @@ struct AddMemoryView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                RomanticBackground()
-
-                VStack(spacing: 14) {
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        RoundedRectangle(cornerRadius: 26, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                            .frame(height: 154)
-                            .overlay {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "photo.badge.plus")
-                                        .font(.largeTitle)
-                                    Text("Добавить фото")
-                                        .font(.headline)
-                                }
-                                .foregroundStyle(.pink)
-                            }
+            MemoryEditorContent(
+                viewModel: viewModel,
+                selectedPhoto: $selectedPhoto,
+                title: "Новое воспоминание",
+                saveTitle: "Сохранить",
+                save: {
+                    let imageData = try? await selectedPhoto?.loadTransferable(type: Data.self)
+                    let didSave = await viewModel.save(
+                        imageData: imageData,
+                        firestoreService: firestoreService,
+                        storageService: storageService,
+                        userId: userId
+                    )
+                    if didSave {
+                        selectedPhoto = nil
+                        dismiss()
                     }
-                    .buttonStyle(.plain)
+                },
+                close: { dismiss() }
+            )
+        }
+    }
+}
+
+private struct EditMemoryView: View {
+    let memory: Memory
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @StateObject private var viewModel = MemoriesViewModel()
+
+    var body: some View {
+        NavigationStack {
+            MemoryEditorContent(
+                viewModel: viewModel,
+                selectedPhoto: .constant(nil),
+                title: "Редактировать",
+                saveTitle: "Обновить",
+                allowsPhotoSelection: false,
+                save: {
+                    if await viewModel.update(memory: memory, using: firestoreService) {
+                        dismiss()
+                    }
+                },
+                close: { dismiss() }
+            )
+            .onAppear {
+                if viewModel.title.isEmpty {
+                    viewModel.configure(with: memory)
+                }
+            }
+        }
+    }
+}
+
+private struct MemoryEditorContent: View {
+    @ObservedObject var viewModel: MemoriesViewModel
+    @Binding var selectedPhoto: PhotosPickerItem?
+    let title: String
+    let saveTitle: String
+    var allowsPhotoSelection = true
+    let save: () async -> Void
+    let close: () -> Void
+
+    var body: some View {
+        ZStack {
+            RomanticBackground()
+
+            ScrollView {
+                VStack(spacing: 14) {
+                    if allowsPhotoSelection {
+                        PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                .fill(.ultraThinMaterial)
+                                .frame(height: 154)
+                                .overlay {
+                                    VStack(spacing: 8) {
+                                        Image(systemName: selectedPhoto == nil ? "photo.badge.plus" : "checkmark.circle.fill")
+                                            .font(.largeTitle)
+                                        Text(selectedPhoto == nil ? "Добавить фото" : "Фото выбрано")
+                                            .font(.headline)
+                                    }
+                                    .foregroundStyle(.pink)
+                                }
+                        }
+                        .buttonStyle(.plain)
+                    }
 
                     TextField("Название", text: $viewModel.title)
                         .heartLinkMemoryField()
@@ -262,33 +370,73 @@ struct AddMemoryView: View {
                         .heartLinkMemoryField()
                     TextField("Место", text: $viewModel.locationName)
                         .heartLinkMemoryField()
+                    DatePicker("Дата", selection: $viewModel.date, displayedComponents: .date)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 13)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-                    PrimaryActionButton(title: "Сохранить", systemImage: "heart.fill", isLoading: viewModel.isSaving) {
-                        Task {
-                            let imageData = try? await selectedPhoto?.loadTransferable(type: Data.self)
-                            await viewModel.save(
-                                imageData: imageData,
-                                firestoreService: firestoreService,
-                                storageService: storageService,
-                                coupleId: firestoreService.couple.id,
-                                userId: userId
-                            )
-                            selectedPhoto = nil
-                            dismiss()
-                        }
+                    PrimaryActionButton(title: saveTitle, systemImage: "heart.fill", isLoading: viewModel.isSaving) {
+                        Task { await save() }
                     }
 
-                    Spacer()
+                    Spacer(minLength: 12)
                 }
                 .padding(16)
             }
-            .navigationTitle("Новое воспоминание")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Закрыть") { dismiss() }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Закрыть", action: close)
+            }
+        }
+        .alert("Ошибка", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("Понятно", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Не удалось выполнить действие.")
+        }
+    }
+}
+
+private struct MemoryFullScreenPhotoView: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .failure:
+                    EmptyStateView(title: "Фото недоступно", subtitle: "Проверьте сервер и подключение.", systemImage: "photo")
+                        .padding(24)
+                default:
+                    ProgressView()
+                        .tint(.white)
                 }
             }
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .padding(20)
         }
     }
 }

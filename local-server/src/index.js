@@ -488,6 +488,25 @@ app.post("/api/memories", async (request, response, next) => {
   }
 });
 
+app.patch("/api/memories/:memoryId", async (request, response, next) => {
+  try {
+    const row = await get("SELECT json FROM memories WHERE id = ?", [request.params.memoryId]);
+    if (!row) {
+      sendError(response, 404, "Воспоминание не найдено.");
+      return;
+    }
+
+    const memory = request.body.memory || {
+      ...parseJsonRow(row),
+      ...request.body
+    };
+    await upsertJson("memories", memory.id, memory.coupleId, memory);
+    response.json({ memory });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.delete("/api/memories/:memoryId", async (request, response, next) => {
   try {
     await run("DELETE FROM memories WHERE id = ?", [request.params.memoryId]);
@@ -519,11 +538,12 @@ app.patch("/api/goals/:goalId", async (request, response, next) => {
       return;
     }
 
-    const goal = {
-      ...parseJsonRow(row),
-      progress: request.body.progress,
-      currentAmount: request.body.currentAmount,
-      isCompleted: request.body.isCompleted
+    const existingGoal = parseJsonRow(row);
+    const goal = request.body.goal || {
+      ...existingGoal,
+      progress: request.body.progress ?? existingGoal.progress,
+      currentAmount: request.body.currentAmount ?? existingGoal.currentAmount,
+      isCompleted: request.body.isCompleted ?? existingGoal.isCompleted
     };
     await upsertJson("goals", goal.id, goal.coupleId, goal, { kind: goal.kind });
     response.json({ goal });

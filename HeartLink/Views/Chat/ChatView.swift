@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UIKit
 
 struct ChatView: View {
     let currentUser: UserProfile
@@ -9,18 +10,23 @@ struct ChatView: View {
     @EnvironmentObject private var storageService: StorageService
     @StateObject private var viewModel = ChatViewModel()
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var openedImage: OpenedChatImage?
 
     var body: some View {
         ZStack {
             RomanticBackground()
 
             VStack(spacing: 0) {
-                ChatHeader(partner: firestoreService.partner)
+                ChatHeader(partner: firestoreService.partner, isSyncing: firestoreService.isSyncing)
 
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(firestoreService.messages) { message in
+                            ForEach(Array(firestoreService.messages.enumerated()), id: \.element.id) { index, message in
+                                if shouldShowDate(before: message, at: index) {
+                                    MessageDayDivider(date: message.sentAt)
+                                }
+
                                 MessageBubble(
                                     message: message,
                                     isMine: message.authorId == currentUser.id,
@@ -33,6 +39,9 @@ struct ChatView: View {
                                         Task {
                                             await firestoreService.deleteMessage(message)
                                         }
+                                    },
+                                    onOpenImage: { url in
+                                        openedImage = OpenedChatImage(url: url)
                                     }
                                 )
                                 .id(message.id)
@@ -41,18 +50,18 @@ struct ChatView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 12)
                     }
+                    .onAppear {
+                        scrollToLastMessage(with: proxy, animated: false)
+                    }
                     .onChange(of: firestoreService.messages.count) { _, _ in
-                        if let last = firestoreService.messages.last {
-                            withAnimation(.smooth(duration: 0.25)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        }
+                        scrollToLastMessage(with: proxy, animated: true)
                     }
                 }
 
                 ChatComposer(
                     draft: $viewModel.draft,
                     selectedPhoto: $selectedPhoto,
+                    isSending: viewModel.isSending || viewModel.isUploadingImage,
                     sendText: {
                         Task {
                             if viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -86,22 +95,82 @@ struct ChatView: View {
             guard let newValue else { return }
 
             Task {
-                let imageData = try? await newValue.loadTransferable(type: Data.self)
-                await viewModel.sendImage(
-                    imageData,
-                    firestoreService: firestoreService,
-                    storageService: storageService,
-                    coupleId: firestoreService.couple.id,
-                    authorId: currentUser.id
-                )
+                viewModel.selectedImageData = try? await newValue.loadTransferable(type: Data.self)
                 selectedPhoto = nil
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { viewModel.selectedImageData != nil },
+            set: { if !$0 { viewModel.selectedImageData = nil } }
+        )) {
+            if let imageData = viewModel.selectedImageData {
+                ImagePreviewSheet(
+                    imageData: imageData,
+                    isSending: viewModel.isUploadingImage,
+                    send: {
+                        Task {
+                            await viewModel.sendImage(
+                                imageData,
+                                firestoreService: firestoreService,
+                                storageService: storageService,
+                                coupleId: firestoreService.couple.id,
+                                authorId: currentUser.id
+                            )
+                        }
+                    },
+                    cancel: {
+                        viewModel.selectedImageData = nil
+                    }
+                )
+                .presentationDetents([.medium, .large])
+            }
+        }
+        .fullScreenCover(item: $openedImage) { image in
+            FullScreenPhotoView(url: image.url)
+        }
+        .alert("Ошибка", isPresented: Binding(
+            get: { viewModel.errorMessage != nil || firestoreService.lastErrorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil; firestoreService.lastErrorMessage = nil } }
+        )) {
+            Button("Понятно", role: .cancel) {
+                viewModel.errorMessage = nil
+                firestoreService.lastErrorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? firestoreService.lastErrorMessage ?? "Не удалось выполнить действие.")
+        }
+    }
+
+    private func shouldShowDate(before message: ChatMessage, at index: Int) -> Bool {
+        guard index > 0 else { return true }
+        let previous = firestoreService.messages[index - 1]
+        return !Calendar.current.isDate(previous.sentAt, inSameDayAs: message.sentAt)
+    }
+
+    private func scrollToLastMessage(with proxy: ScrollViewProxy, animated: Bool) {
+        guard let last = firestoreService.messages.last else { return }
+        let action = {
+            proxy.scrollTo(last.id, anchor: .bottom)
+        }
+
+        if animated {
+            withAnimation(.smooth(duration: 0.25)) {
+                action()
+            }
+        } else {
+            action()
         }
     }
 }
 
+private struct OpenedChatImage: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
 private struct ChatHeader: View {
     let partner: UserProfile
+    let isSyncing: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -121,15 +190,35 @@ private struct ChatHeader: View {
 
             Spacer()
 
-            Image(systemName: "lock.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(8)
-                .background(.regularMaterial, in: Circle())
+            if isSyncing {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.pink)
+            } else {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .background(.regularMaterial, in: Circle())
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+    }
+}
+
+private struct MessageDayDivider: View {
+    let date: Date
+
+    var body: some View {
+        Text(date.heartLinkShortDate)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(.regularMaterial, in: Capsule())
+            .padding(.vertical, 4)
     }
 }
 
@@ -138,6 +227,7 @@ private struct MessageBubble: View {
     let isMine: Bool
     let onReact: (String) -> Void
     let onDelete: () -> Void
+    let onOpenImage: (URL) -> Void
 
     var body: some View {
         HStack {
@@ -164,10 +254,10 @@ private struct MessageBubble: View {
                     }
 
                     Menu {
-                        Button("Сердце ❤️") { onReact("❤️") }
-                        Button("Огонь 🔥") { onReact("🔥") }
-                        Button("Нежность 🥰") { onReact("🥰") }
-                        Button("Искра ✨") { onReact("✨") }
+                        Button("Сердце") { onReact("❤️") }
+                        Button("Огонь") { onReact("🔥") }
+                        Button("Нежность") { onReact("🥰") }
+                        Button("Искра") { onReact("✨") }
                         Divider()
                         Button("Удалить", role: .destructive) { onDelete() }
                     } label: {
@@ -175,6 +265,10 @@ private struct MessageBubble: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+
+                    Text(message.sentAt, style: .time)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -196,17 +290,34 @@ private struct MessageBubble: View {
                         image
                             .resizable()
                             .scaledToFill()
+                    case .failure:
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(.white.opacity(0.22))
+                            .overlay {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle")
+                                    Text("Фото недоступно")
+                                        .font(.caption)
+                                }
+                            }
                     default:
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .fill(.white.opacity(0.22))
                             .overlay {
-                                Image(systemName: "photo")
-                                    .font(.largeTitle)
+                                ProgressView()
+                                    .tint(isMine ? .white : .pink)
                             }
                     }
                 }
-                .frame(width: 210, height: 160)
+                .frame(width: 220, height: 170)
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .onTapGesture {
+                    if let url = message.mediaURL {
+                        onOpenImage(url)
+                    }
+                }
+
                 Text(message.text)
                     .font(.subheadline)
             }
@@ -236,6 +347,7 @@ private struct MessageBubble: View {
 private struct ChatComposer: View {
     @Binding var draft: String
     @Binding var selectedPhoto: PhotosPickerItem?
+    let isSending: Bool
     let sendText: () -> Void
 
     var body: some View {
@@ -246,32 +358,120 @@ private struct ChatComposer: View {
                     .frame(width: 38, height: 38)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Отправить фото")
+            .disabled(isSending)
+            .accessibilityLabel("Выбрать фото")
 
             TextField("Напишите нежное сообщение", text: $draft, axis: .vertical)
                 .lineLimit(1...4)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .disabled(isSending)
 
             Button {
                 sendText()
             } label: {
-                Image(systemName: draft.isEmpty ? "mic.fill" : "paperplane.fill")
-                    .font(.headline)
-                    .frame(width: 40, height: 40)
-                    .foregroundStyle(.white)
-                    .background(
-                        LinearGradient(colors: [.pink, .purple], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        in: Circle()
-                    )
+                ZStack {
+                    Circle()
+                        .fill(LinearGradient(colors: [.pink, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    if isSending {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic.fill" : "paperplane.fill")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                    }
+                }
+                .frame(width: 40, height: 40)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(draft.isEmpty ? "Записать голосовое" : "Отправить")
+            .disabled(isSending)
+            .accessibilityLabel(draft.isEmpty ? "Голосовое сообщение" : "Отправить")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+    }
+}
+
+private struct ImagePreviewSheet: View {
+    let imageData: Data
+    let isSending: Bool
+    let send: () -> Void
+    let cancel: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                RomanticBackground()
+
+                VStack(spacing: 16) {
+                    if let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 440)
+                            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                            .padding(.horizontal, 16)
+                    } else {
+                        EmptyStateView(title: "Фото не открылось", subtitle: "Выберите другое изображение.", systemImage: "photo")
+                            .padding(16)
+                    }
+
+                    PrimaryActionButton(title: "Отправить фото", systemImage: "paperplane.fill", isLoading: isSending, action: send)
+                        .padding(.horizontal, 16)
+
+                    Spacer()
+                }
+                .padding(.top, 16)
+            }
+            .navigationTitle("Предпросмотр")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Отмена", action: cancel)
+                }
+            }
+        }
+    }
+}
+
+private struct FullScreenPhotoView: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                case .failure:
+                    EmptyStateView(title: "Фото недоступно", subtitle: "Проверьте сервер и подключение.", systemImage: "photo")
+                        .padding(24)
+                default:
+                    ProgressView()
+                        .tint(.white)
+                }
+            }
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .padding(20)
+        }
     }
 }
 

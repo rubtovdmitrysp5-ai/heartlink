@@ -14,13 +14,17 @@ struct GamesView: View {
 
                     DailyQuestionHero(game: firestoreService.games.first { $0.kind == .dailyQuestion })
 
-                    ForEach(firestoreService.games) { game in
-                        Button {
-                            router.navigate(to: .game(game.id))
-                        } label: {
-                            GameCard(game: game)
+                    if firestoreService.games.isEmpty {
+                        EmptyStateView(title: "Игры загружаются", subtitle: "Проверьте сервер или откройте экран чуть позже.", systemImage: "sparkles")
+                    } else {
+                        ForEach(firestoreService.games) { game in
+                            Button {
+                                router.navigate(to: .game(game.id))
+                            } label: {
+                                GameCard(game: game)
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -46,7 +50,7 @@ private struct DailyQuestionHero: View {
                         .font(.headline)
                         .foregroundStyle(.pink)
                     Spacer()
-                    Text(game?.completedToday == true ? "Готово" : "Новое")
+                    Text(game?.completedToday == true ? "Сохранено" : "Новое")
                         .font(.caption.weight(.bold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -65,6 +69,10 @@ private struct DailyQuestionHero: View {
 private struct GameCard: View {
     let game: LoveGame
 
+    private var answerCount: Int {
+        game.answers?.count ?? 0
+    }
+
     var body: some View {
         GlassCard {
             HStack(spacing: 14) {
@@ -78,12 +86,23 @@ private struct GameCard: View {
                     )
 
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(game.kind.title)
-                        .font(.headline)
+                    HStack(spacing: 8) {
+                        Text(game.kind.title)
+                            .font(.headline)
+                        if game.completedToday {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                    }
                     Text(game.prompt)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
+                    if answerCount > 0 {
+                        Text("Ответов: \(answerCount)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.pink)
+                    }
                 }
 
                 Spacer()
@@ -161,25 +180,71 @@ struct GameDetailView: View {
                                     }
                                 }
 
-                                PrimaryActionButton(title: game.completedToday ? "Сохранено" : "Отправить партнёру", systemImage: "paperplane.fill") {
+                                PrimaryActionButton(
+                                    title: game.completedToday ? "Отправить ещё ответ" : "Отправить партнёру",
+                                    systemImage: "paperplane.fill",
+                                    isLoading: viewModel.isSaving
+                                ) {
                                     Task {
-                                        let answer = game.options.isEmpty ? viewModel.dailyAnswer : (viewModel.selectedAnswer ?? "")
-                                        await firestoreService.submitGameAnswer(game: game, answer: answer, userId: userId)
-                                        viewModel.clear()
+                                        _ = await viewModel.submit(game: game, userId: userId, using: firestoreService)
                                     }
                                 }
                             }
                         }
+
+                        GameAnswersHistory(answers: game.answers ?? [])
                     }
                     .padding(16)
                 }
             } else {
-                EmptyStateView(title: "Игра не найдена", subtitle: "Попробуйте открыть ее позже.", systemImage: "sparkles")
+                EmptyStateView(title: "Игра не найдена", subtitle: "Попробуйте открыть её позже.", systemImage: "sparkles")
                     .padding(16)
             }
         }
         .navigationTitle("Игра")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Ошибка", isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("Понятно", role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Не удалось выполнить действие.")
+        }
+    }
+}
+
+private struct GameAnswersHistory: View {
+    let answers: [LoveGameAnswer]
+
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("История ответов")
+                    .font(.headline)
+
+                if answers.isEmpty {
+                    Text("Пока нет ответов. Ответьте первым.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(answers.sorted(by: { $0.createdAt > $1.createdAt })) { answer in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(answer.text)
+                                .font(.subheadline.weight(.semibold))
+                            Text(answer.createdAt.heartLinkShortDate)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+            }
+        }
     }
 }
 

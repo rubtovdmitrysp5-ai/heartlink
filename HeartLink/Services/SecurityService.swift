@@ -4,10 +4,28 @@ import LocalAuthentication
 
 @MainActor
 final class SecurityService: ObservableObject {
+    private let defaults: UserDefaults
+    private let privateModeKey = "heartLinkPrivateModeEnabled"
+    private let passcodeKey = "heartLinkPasscode"
+
     @Published var isLocked = false
-    @Published var privateModeEnabled = false
-    @Published var passcode = ""
+    @Published var privateModeEnabled: Bool {
+        didSet {
+            defaults.set(privateModeEnabled, forKey: privateModeKey)
+        }
+    }
+    @Published var passcode: String {
+        didSet {
+            defaults.set(passcode, forKey: passcodeKey)
+        }
+    }
     @Published var failedReason: String?
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.privateModeEnabled = defaults.bool(forKey: privateModeKey)
+        self.passcode = defaults.string(forKey: passcodeKey) ?? ""
+    }
 
     func unlockWithBiometrics() async {
         let context = LAContext()

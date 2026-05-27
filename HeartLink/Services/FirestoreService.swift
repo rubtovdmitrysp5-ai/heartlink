@@ -15,6 +15,8 @@ final class FirestoreService: ObservableObject {
     @Published var memories: [Memory] = SampleDataStore.memories
     @Published var goals: [CoupleGoal] = SampleDataStore.goals
     @Published var games: [LoveGame] = SampleDataStore.games
+    @Published var isSyncing = false
+    @Published var lastErrorMessage: String?
 
     init(isFirebaseEnabled: Bool) {
         self.isFirebaseEnabled = isFirebaseEnabled
@@ -38,6 +40,9 @@ final class FirestoreService: ObservableObject {
         guard !isFirebaseEnabled, localBaseURLString != nil else { return }
 
         do {
+            isSyncing = true
+            defer { isSyncing = false }
+
             let response: LocalCoupleDataResponse = try await localRequest(
                 path: "/api/couple/\(couple.id)/data",
                 method: "GET"
@@ -55,6 +60,7 @@ final class FirestoreService: ObservableObject {
                 }
             }
         } catch {
+            lastErrorMessage = "Сервер недоступен. Проверьте подключение."
             if goals.isEmpty {
                 goals = SampleDataStore.goals
             }
@@ -85,9 +91,10 @@ final class FirestoreService: ObservableObject {
         ], merge: true)
     }
 
-    func sendTextMessage(_ text: String, coupleId: String, authorId: String) async {
+    @discardableResult
+    func sendTextMessage(_ text: String, coupleId: String, authorId: String) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return false }
 
         let message = ChatMessage(
             id: UUID().uuidString,
@@ -102,10 +109,16 @@ final class FirestoreService: ObservableObject {
             isRead: false
         )
 
-        await saveMessage(message)
+        return await saveMessage(message)
     }
 
-    func sendImageMessage(imageURL: URL?, coupleId: String, authorId: String) async {
+    @discardableResult
+    func sendImageMessage(imageURL: URL?, coupleId: String, authorId: String) async -> Bool {
+        guard imageURL != nil else {
+            lastErrorMessage = "Фото не загрузилось. Попробуйте ещё раз."
+            return false
+        }
+
         let message = ChatMessage(
             id: UUID().uuidString,
             coupleId: coupleId,
@@ -119,15 +132,21 @@ final class FirestoreService: ObservableObject {
             isRead: false
         )
 
-        await saveMessage(message)
+        return await saveMessage(message)
     }
 
+    @discardableResult
     func sendImageData(
         _ imageData: Data?,
         storageService: StorageService,
         coupleId: String,
         authorId: String
-    ) async {
+    ) async -> Bool {
+        guard let imageData, !imageData.isEmpty else {
+            lastErrorMessage = "Не удалось прочитать фото."
+            return false
+        }
+
         let imageURL: URL?
 
         if isFirebaseEnabled {
@@ -139,7 +158,7 @@ final class FirestoreService: ObservableObject {
             imageURL = try? await uploadLocalImageData(imageData, coupleId: coupleId)
         }
 
-        await sendImageMessage(imageURL: imageURL, coupleId: coupleId, authorId: authorId)
+        return await sendImageMessage(imageURL: imageURL, coupleId: coupleId, authorId: authorId)
     }
 
     func deleteMessage(_ message: ChatMessage) async {
@@ -203,7 +222,8 @@ final class FirestoreService: ObservableObject {
             .updateData(["reactions": FieldValue.arrayUnion([reaction])])
     }
 
-    func addMemory(title: String, note: String, locationName: String, imageURL: URL?, userId: String) async {
+    @discardableResult
+    func addMemory(title: String, note: String, locationName: String, imageURL: URL?, date: Date = .now, userId: String) async -> Bool {
         let memory = Memory(
             id: UUID().uuidString,
             coupleId: couple.id,
@@ -213,7 +233,7 @@ final class FirestoreService: ObservableObject {
             locationName: locationName,
             latitude: nil,
             longitude: nil,
-            date: .now,
+            date: date,
             createdBy: userId
         )
 
@@ -224,28 +244,37 @@ final class FirestoreService: ObservableObject {
                 body: LocalMemoryRequest(memory: memory)
             ) {
                 memories.insert(response.memory, at: 0)
+                return true
             } else {
-                memories.insert(memory, at: 0)
+                lastErrorMessage = "Не удалось сохранить воспоминание."
+                return false
             }
-            return
         }
 
-        try? await Firestore.firestore()
-            .collection("couples")
-            .document(couple.id)
-            .collection("memories")
-            .document(memory.id)
-            .setData(memory.dictionary)
+        do {
+            try await Firestore.firestore()
+                .collection("couples")
+                .document(couple.id)
+                .collection("memories")
+                .document(memory.id)
+                .setData(memory.dictionary)
+            return true
+        } catch {
+            lastErrorMessage = "Не удалось сохранить воспоминание."
+            return false
+        }
     }
 
+    @discardableResult
     func addMemoryWithImageData(
         title: String,
         note: String,
         locationName: String,
+        date: Date,
         imageData: Data?,
         storageService: StorageService,
         userId: String
-    ) async {
+    ) async -> Bool {
         let imageURL: URL?
         if isFirebaseEnabled {
             imageURL = try? await storageService.uploadImageData(
@@ -256,11 +285,12 @@ final class FirestoreService: ObservableObject {
             imageURL = try? await uploadLocalImageData(imageData, coupleId: couple.id)
         }
 
-        await addMemory(
+        return await addMemory(
             title: title,
             note: note,
             locationName: locationName,
             imageURL: imageURL,
+            date: date,
             userId: userId
         )
     }
@@ -280,7 +310,50 @@ final class FirestoreService: ObservableObject {
             .delete()
     }
 
-    func createGoal(title: String, detail: String, kind: GoalKind, targetAmount: Double?) async {
+    @discardableResult
+    func updateMemory(_ memory: Memory, title: String, note: String, locationName: String, date: Date) async -> Bool {
+        var updated = memory
+        updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.locationName = locationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Без места" : locationName
+        updated.date = date
+
+        guard !updated.title.isEmpty else {
+            lastErrorMessage = "Введите название воспоминания."
+            return false
+        }
+
+        guard isFirebaseEnabled else {
+            if let response: LocalMemoryResponse = try? await localRequest(
+                path: "/api/memories/\(memory.id)",
+                method: "PATCH",
+                body: LocalMemoryRequest(memory: updated)
+            ), let index = memories.firstIndex(where: { $0.id == memory.id }) {
+                memories[index] = response.memory
+                memories.sort { $0.date > $1.date }
+                return true
+            }
+
+            lastErrorMessage = "Не удалось обновить воспоминание."
+            return false
+        }
+
+        do {
+            try await Firestore.firestore()
+                .collection("couples")
+                .document(couple.id)
+                .collection("memories")
+                .document(memory.id)
+                .setData(updated.dictionary, merge: true)
+            return true
+        } catch {
+            lastErrorMessage = "Не удалось обновить воспоминание."
+            return false
+        }
+    }
+
+    @discardableResult
+    func createGoal(title: String, detail: String, kind: GoalKind, targetAmount: Double?) async -> Bool {
         let goal = CoupleGoal(
             id: UUID().uuidString,
             coupleId: couple.id,
@@ -301,18 +374,25 @@ final class FirestoreService: ObservableObject {
                 body: LocalGoalRequest(goal: goal)
             ) {
                 goals.append(response.goal)
+                return true
             } else {
-                goals.append(goal)
+                lastErrorMessage = "Не удалось создать цель."
+                return false
             }
-            return
         }
 
-        try? await Firestore.firestore()
-            .collection("couples")
-            .document(couple.id)
-            .collection("goals")
-            .document(goal.id)
-            .setData(goal.dictionary)
+        do {
+            try await Firestore.firestore()
+                .collection("couples")
+                .document(couple.id)
+                .collection("goals")
+                .document(goal.id)
+                .setData(goal.dictionary)
+            return true
+        } catch {
+            lastErrorMessage = "Не удалось создать цель."
+            return false
+        }
     }
 
     func deleteGoal(_ goal: CoupleGoal) async {
@@ -330,19 +410,84 @@ final class FirestoreService: ObservableObject {
             .delete()
     }
 
-    func submitGameAnswer(game: LoveGame, answer: String, userId: String) async {
+    @discardableResult
+    func updateGoal(_ goal: CoupleGoal, title: String, detail: String, kind: GoalKind, targetAmount: Double?) async -> Bool {
+        var updated = goal
+        updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.detail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.kind = kind
+        updated.targetAmount = kind == .savings ? targetAmount : nil
+        updated.currentAmount = kind == .savings ? min(updated.currentAmount ?? 0, targetAmount ?? 0) : nil
+        updated.progress = kind == .savings && (targetAmount ?? 0) > 0 ? min((updated.currentAmount ?? 0) / (targetAmount ?? 1), 1) : updated.progress
+
+        guard !updated.title.isEmpty else {
+            lastErrorMessage = "Введите название цели."
+            return false
+        }
+
+        guard isFirebaseEnabled else {
+            if let response: LocalGoalResponse = try? await localRequest(
+                path: "/api/goals/\(goal.id)",
+                method: "PATCH",
+                body: LocalGoalRequest(goal: updated)
+            ), let index = goals.firstIndex(where: { $0.id == goal.id }) {
+                goals[index] = response.goal
+                return true
+            }
+
+            lastErrorMessage = "Не удалось обновить цель."
+            return false
+        }
+
+        do {
+            try await Firestore.firestore()
+                .collection("couples")
+                .document(goal.coupleId)
+                .collection("goals")
+                .document(goal.id)
+                .setData(updated.dictionary, merge: true)
+            return true
+        } catch {
+            lastErrorMessage = "Не удалось обновить цель."
+            return false
+        }
+    }
+
+    func addSavingsAmount(_ amount: Double, to goal: CoupleGoal) async {
+        guard amount > 0, let targetAmount = goal.targetAmount else { return }
+        let currentAmount = min((goal.currentAmount ?? 0) + amount, targetAmount)
+        await updateGoalProgress(goal: goal, progress: targetAmount > 0 ? currentAmount / targetAmount : goal.progress)
+    }
+
+    func completeGoal(_ goal: CoupleGoal) async {
+        await updateGoalProgress(goal: goal, progress: 1)
+    }
+
+    @discardableResult
+    func submitGameAnswer(game: LoveGame, answer: String, userId: String) async -> Bool {
+        let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            lastErrorMessage = "Введите ответ перед отправкой."
+            return false
+        }
+
         guard isFirebaseEnabled else {
             if let response: LocalGameResponse = try? await localRequest(
                 path: "/api/games/\(game.id)/answers",
                 method: "POST",
-                body: LocalGameAnswerRequest(userId: userId, answer: answer)
+                body: LocalGameAnswerRequest(userId: userId, answer: trimmed)
             ), let index = games.firstIndex(where: { $0.id == game.id }) {
                 games[index] = response.game
+                return true
             } else if let index = games.firstIndex(where: { $0.id == game.id }) {
                 games[index].completedToday = true
+                lastErrorMessage = "Ответ сохранён только на этом устройстве."
+                return false
             }
-            return
+            return false
         }
+
+        return false
     }
 
     func updateLocalProfile(userId: String, displayName: String, partnerName: String, startedAt: Date) async {
@@ -541,14 +686,21 @@ final class FirestoreService: ObservableObject {
         listeners.removeAll()
     }
 
-    private func saveMessage(_ message: ChatMessage) async {
+    @discardableResult
+    private func saveMessage(_ message: ChatMessage) async -> Bool {
         if isFirebaseEnabled {
-            try? await Firestore.firestore()
-                .collection("couples")
-                .document(message.coupleId)
-                .collection("messages")
-                .document(message.id)
-                .setData(message.dictionary)
+            do {
+                try await Firestore.firestore()
+                    .collection("couples")
+                    .document(message.coupleId)
+                    .collection("messages")
+                    .document(message.id)
+                    .setData(message.dictionary)
+                return true
+            } catch {
+                lastErrorMessage = "Не удалось отправить сообщение."
+                return false
+            }
         } else {
             if let response: LocalMessageResponse = try? await localRequest(
                 path: "/api/messages",
@@ -556,8 +708,10 @@ final class FirestoreService: ObservableObject {
                 body: LocalMessageRequest(message: message)
             ) {
                 messages.append(response.message)
+                return true
             } else {
-                messages.append(message)
+                lastErrorMessage = "Не удалось отправить сообщение. Проверьте сервер."
+                return false
             }
         }
     }
