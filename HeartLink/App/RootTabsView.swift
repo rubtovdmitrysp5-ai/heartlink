@@ -9,20 +9,36 @@ struct RootTabsView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             ForEach(AppTab.allCases) { tab in
-                NavigationStack(path: tabRouter.binding(for: tab)) {
-                    tab.makeContentView(currentUser: currentUser, selectedTab: $selectedTab)
-                        .withAppRouter()
-                        .withSheetDestinations(sheet: Binding(
-                            get: { tabRouter.router(for: tab).presentedSheet },
-                            set: { tabRouter.router(for: tab).presentedSheet = $0 }
-                        ))
-                }
-                .environmentObject(tabRouter.router(for: tab))
+                TabNavigationRoot(
+                    tab: tab,
+                    currentUser: currentUser,
+                    selectedTab: $selectedTab,
+                    router: tabRouter.router(for: tab)
+                )
                 .tabItem { tab.label }
                 .tag(tab)
             }
         }
         .tint(.pink)
+    }
+}
+
+private struct TabNavigationRoot: View {
+    let tab: AppTab
+    let currentUser: UserProfile
+    @Binding var selectedTab: AppTab
+    @ObservedObject var router: RouterPath
+
+    var body: some View {
+        NavigationStack(path: Binding(
+            get: { router.path },
+            set: { router.path = $0 }
+        )) {
+            tab.makeContentView(currentUser: currentUser, selectedTab: $selectedTab)
+                .environmentObject(router)
+                .withAppRouter()
+                .withSheetDestinations(sheet: $router.presentedSheet)
+        }
     }
 }
 

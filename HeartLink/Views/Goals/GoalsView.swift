@@ -57,12 +57,11 @@ private struct GoalGroupSection: View {
                 SectionTitle(kind.title, subtitle: nil, systemImage: kind.symbolName)
 
                 ForEach(goals) { goal in
-                    Button {
-                        open(goal)
-                    } label: {
-                        GoalRow(goal: goal, increase: { increase(goal) })
-                    }
-                    .buttonStyle(.plain)
+                    GoalRow(
+                        goal: goal,
+                        open: { open(goal) },
+                        increase: { increase(goal) }
+                    )
                 }
             }
         }
@@ -71,6 +70,7 @@ private struct GoalGroupSection: View {
 
 private struct GoalRow: View {
     let goal: CoupleGoal
+    let open: () -> Void
     let increase: () -> Void
 
     var body: some View {
@@ -110,6 +110,8 @@ private struct GoalRow: View {
             }
         }
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: open)
     }
 }
 
