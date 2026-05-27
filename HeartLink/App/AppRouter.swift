@@ -45,6 +45,8 @@ enum Route: Hashable {
 
 enum SheetDestination: Identifiable, Hashable {
     case addMemory
+    case addGoal
+    case profile
     case settings
 
     var id: String { String(describing: self) }

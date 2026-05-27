@@ -37,6 +37,8 @@ struct HomeView: View {
                         }
                     } openSecurity: {
                         router.present(.settings)
+                    } openProfile: {
+                        router.present(.profile)
                     } lock: {
                         securityService.lock()
                     } resetPairing: {
@@ -213,6 +215,7 @@ private struct MoodSnapshotCard: View {
 private struct QuickActionsCard: View {
     let enableNotifications: () -> Void
     let openSecurity: () -> Void
+    let openProfile: () -> Void
     let lock: () -> Void
     let resetPairing: () -> Void
 
@@ -224,6 +227,7 @@ private struct QuickActionsCard: View {
                 HStack(spacing: 10) {
                     ActionIconButton(title: "Уведомления", systemImage: "bell.badge", action: enableNotifications)
                     ActionIconButton(title: "Защита", systemImage: "lock.shield", action: openSecurity)
+                    ActionIconButton(title: "Профиль", systemImage: "person.2", action: openProfile)
                     ActionIconButton(title: "Скрыть", systemImage: "eye.slash", action: lock)
                     ActionIconButton(title: "Сброс", systemImage: "arrow.counterclockwise", action: resetPairing)
                 }

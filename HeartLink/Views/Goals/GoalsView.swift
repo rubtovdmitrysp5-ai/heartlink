@@ -32,6 +32,16 @@ struct GoalsView: View {
         }
         .navigationTitle("Цели")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    router.present(.addGoal)
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Добавить цель")
+            }
+        }
     }
 }
 
@@ -106,6 +116,7 @@ private struct GoalRow: View {
 struct GoalDetailView: View {
     let goalId: String
     @EnvironmentObject private var firestoreService: FirestoreService
+    @Environment(\.dismiss) private var dismiss
 
     private var goal: CoupleGoal? {
         firestoreService.goals.first { $0.id == goalId }
@@ -143,12 +154,88 @@ struct GoalDetailView: View {
                     Spacer()
                 }
             } else {
-                EmptyStateView(title: "Цель не найдена", subtitle: "Она могла быть завершена или ещё загружается.", systemImage: "target")
+                EmptyStateView(title: "Цель не найдена", subtitle: "Она могла быть завершена или еще загружается.", systemImage: "target")
                     .padding(16)
             }
         }
         .navigationTitle("Цель")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let goal {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        Task {
+                            await firestoreService.deleteGoal(goal)
+                            dismiss()
+                        }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel("Удалить цель")
+                }
+            }
+        }
+    }
+}
+
+struct AddGoalView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var firestoreService: FirestoreService
+    @StateObject private var viewModel = GoalsViewModel()
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                RomanticBackground()
+
+                ScrollView {
+                    VStack(spacing: 14) {
+                        Picker("Тип", selection: $viewModel.kind) {
+                            ForEach(GoalKind.allCases) { kind in
+                                Text(kind.title).tag(kind)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        TextField("Название", text: $viewModel.title)
+                            .heartLinkGoalField()
+                        TextField("Описание", text: $viewModel.detail, axis: .vertical)
+                            .lineLimit(3...5)
+                            .heartLinkGoalField()
+
+                        if viewModel.kind == .savings {
+                            TextField("Сумма цели", text: $viewModel.targetAmount)
+                                .keyboardType(.decimalPad)
+                                .heartLinkGoalField()
+                        }
+
+                        PrimaryActionButton(title: "Сохранить цель", systemImage: "target", isLoading: viewModel.isSaving) {
+                            Task {
+                                if await viewModel.createGoal(using: firestoreService) {
+                                    dismiss()
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .navigationTitle("Новая цель")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Закрыть") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private extension View {
+    func heartLinkGoalField() -> some View {
+        padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
 

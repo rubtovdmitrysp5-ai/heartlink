@@ -102,6 +102,16 @@ async function init() {
       json TEXT NOT NULL
     )
   `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS games (
+      id TEXT PRIMARY KEY,
+      couple_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      day_key TEXT,
+      json TEXT NOT NULL
+    )
+  `);
 }
 
 module.exports = {

@@ -13,16 +13,12 @@ final class MemoriesViewModel: ObservableObject {
         isSaving = true
         defer { isSaving = false }
 
-        let imageURL = try? await storageService.uploadImageData(
-            imageData,
-            path: "couples/\(coupleId)/memories/\(UUID().uuidString).jpg"
-        )
-
-        await firestoreService.addMemory(
+        await firestoreService.addMemoryWithImageData(
             title: title,
             note: note,
             locationName: locationName.isEmpty ? "Без места" : locationName,
-            imageURL: imageURL,
+            imageData: imageData,
+            storageService: storageService,
             userId: userId
         )
 

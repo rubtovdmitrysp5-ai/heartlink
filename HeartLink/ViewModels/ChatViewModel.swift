@@ -23,11 +23,12 @@ final class ChatViewModel: ObservableObject {
         coupleId: String,
         authorId: String
     ) async {
-        let imageURL = try? await storageService.uploadImageData(
+        await firestoreService.sendImageData(
             imageData,
-            path: "couples/\(coupleId)/messages/\(UUID().uuidString).jpg"
+            storageService: storageService,
+            coupleId: coupleId,
+            authorId: authorId
         )
-        await firestoreService.sendImageMessage(imageURL: imageURL, coupleId: coupleId, authorId: authorId)
     }
 
     func react(_ emoji: String, message: ChatMessage, using service: FirestoreService, authorId: String) async {

@@ -9,3 +9,5 @@ Package.resolved
 GoogleService-Info.plist
 local-server/data/
 local-server/node_modules/
+local-server/uploads/
+local-server/*.log

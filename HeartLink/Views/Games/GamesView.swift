@@ -29,6 +29,9 @@ struct GamesView: View {
         }
         .navigationTitle("Игры")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await firestoreService.refreshLocalCoupleData()
+        }
     }
 }
 
@@ -97,10 +100,18 @@ struct GameDetailView: View {
     let gameId: String
 
     @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var authenticationService: AuthenticationService
     @StateObject private var viewModel = GamesViewModel()
 
     private var game: LoveGame? {
         firestoreService.games.first { $0.id == gameId }
+    }
+
+    private var userId: String {
+        if case .signedIn(let user) = authenticationService.state {
+            return user.id
+        }
+        return SampleDataStore.currentUser.id
     }
 
     var body: some View {
@@ -150,8 +161,12 @@ struct GameDetailView: View {
                                     }
                                 }
 
-                                PrimaryActionButton(title: "Отправить партнёру", systemImage: "paperplane.fill") {
-                                    viewModel.clear()
+                                PrimaryActionButton(title: game.completedToday ? "Сохранено" : "Отправить партнёру", systemImage: "paperplane.fill") {
+                                    Task {
+                                        let answer = game.options.isEmpty ? viewModel.dailyAnswer : (viewModel.selectedAnswer ?? "")
+                                        await firestoreService.submitGameAnswer(game: game, answer: answer, userId: userId)
+                                        viewModel.clear()
+                                    }
                                 }
                             }
                         }
@@ -159,7 +174,7 @@ struct GameDetailView: View {
                     .padding(16)
                 }
             } else {
-                EmptyStateView(title: "Игра не найдена", subtitle: "Попробуйте открыть её позже.", systemImage: "sparkles")
+                EmptyStateView(title: "Игра не найдена", subtitle: "Попробуйте открыть ее позже.", systemImage: "sparkles")
                     .padding(16)
             }
         }

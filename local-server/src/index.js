@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const fs = require("fs");
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -6,10 +7,14 @@ const { all, get, init, run } = require("./database");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const uploadsDir = path.join(__dirname, "..", "uploads");
+fs.mkdirSync(uploadsDir, { recursive: true });
 
+app.set("trust proxy", true);
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "12mb" }));
 app.use(express.static(path.join(__dirname, "..", "public")));
+app.use("/uploads", express.static(uploadsDir));
 
 function nowISO() {
   return new Date().toISOString();
@@ -73,6 +78,14 @@ async function upsertJson(table, id, coupleId, json, extra = {}) {
       "INSERT OR REPLACE INTO goals (id, couple_id, kind, json) VALUES (?, ?, ?, ?)",
       [id, coupleId, extra.kind || json.kind || "task", JSON.stringify(json)]
     );
+    return;
+  }
+
+  if (table === "games") {
+    await run(
+      "INSERT OR REPLACE INTO games (id, couple_id, kind, day_key, json) VALUES (?, ?, ?, ?, ?)",
+      [id, coupleId, extra.kind || json.kind || "dailyQuestion", extra.dayKey || json.dayKey || null, JSON.stringify(json)]
+    );
   }
 }
 
@@ -126,6 +139,64 @@ async function seedGoalsIfNeeded(coupleId) {
   }
 }
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function seedGamesIfNeeded(coupleId) {
+  const dayKey = todayKey();
+  const existing = await get("SELECT id FROM games WHERE couple_id = ? AND day_key = ? LIMIT 1", [coupleId, dayKey]);
+  if (existing) {
+    return;
+  }
+
+  await run("DELETE FROM games WHERE couple_id = ? AND kind = ?", [coupleId, "dailyQuestion"]);
+
+  const dailyPrompts = [
+    "Что сегодня заставило тебя улыбнуться из-за партнера?",
+    "Какой маленький жест любви ты хочешь сделать сегодня?",
+    "За что ты хочешь поблагодарить партнера прямо сейчас?",
+    "Какой общий момент недели хочется запомнить?"
+  ];
+  const index = Math.floor(Date.now() / 86400000) % dailyPrompts.length;
+  const games = [
+    {
+      id: makeId("game"),
+      coupleId,
+      kind: "dailyQuestion",
+      prompt: dailyPrompts[index],
+      options: [],
+      completedToday: false,
+      dayKey,
+      answers: []
+    },
+    {
+      id: makeId("game"),
+      coupleId,
+      kind: "partnerQuiz",
+      prompt: "Какой вечер партнер выберет первым?",
+      options: ["Кино дома", "Прогулка", "Ресторан", "Игровой вечер"],
+      completedToday: false,
+      dayKey,
+      answers: []
+    },
+    {
+      id: makeId("game"),
+      coupleId,
+      kind: "romanticTask",
+      prompt: "Отправь короткое сообщение с одной причиной, почему тебе тепло рядом.",
+      options: [],
+      completedToday: false,
+      dayKey,
+      answers: []
+    }
+  ];
+
+  for (const game of games) {
+    await upsertJson("games", game.id, coupleId, game, { kind: game.kind, dayKey });
+  }
+}
+
 async function loadSession(userId) {
   const user = await get("SELECT * FROM users WHERE id = ?", [userId]);
   if (!user) {
@@ -164,6 +235,10 @@ function sendError(response, status, message) {
 }
 
 app.get("/api/health", (_request, response) => {
+  response.json({ status: "ok", app: "HeartLink local server" });
+});
+
+app.get("/health", (_request, response) => {
   response.json({ status: "ok", app: "HeartLink local server" });
 });
 
@@ -222,6 +297,7 @@ app.post("/api/pairing/link", async (request, response, next) => {
     );
     await run("UPDATE users SET couple_id = ? WHERE id IN (?, ?)", [coupleId, user.id, partner.id]);
     await seedGoalsIfNeeded(coupleId);
+    await seedGamesIfNeeded(coupleId);
 
     response.json({ session: await loadSession(user.id) });
   } catch (error) {
@@ -253,6 +329,7 @@ app.post("/api/dev/create-test-partner", async (request, response, next) => {
     );
     await run("UPDATE users SET couple_id = ? WHERE id IN (?, ?)", [coupleId, user.id, partner.id]);
     await seedGoalsIfNeeded(coupleId);
+    await seedGamesIfNeeded(coupleId);
 
     response.json({ session: await loadSession(user.id), partnerCode: partner.code });
   } catch (error) {
@@ -303,10 +380,12 @@ app.get("/api/couple/:coupleId/data", async (request, response, next) => {
     }
 
     await seedGoalsIfNeeded(coupleId);
+    await seedGamesIfNeeded(coupleId);
 
     const messages = await all("SELECT json FROM messages WHERE couple_id = ? ORDER BY sent_at ASC", [coupleId]);
     const memories = await all("SELECT json FROM memories WHERE couple_id = ? ORDER BY date DESC", [coupleId]);
     const goals = await all("SELECT json FROM goals WHERE couple_id = ? ORDER BY kind ASC", [coupleId]);
+    const games = await all("SELECT json FROM games WHERE couple_id = ? ORDER BY kind ASC", [coupleId]);
     const firstUser = await get("SELECT id, display_name, current_mood FROM users WHERE id = ?", [couple.first_user_id]);
     const secondUser = await get("SELECT id, display_name, current_mood FROM users WHERE id = ?", [couple.second_user_id]);
 
@@ -314,6 +393,7 @@ app.get("/api/couple/:coupleId/data", async (request, response, next) => {
       messages: messages.map(parseJsonRow),
       memories: memories.map(parseJsonRow),
       goals: goals.map(parseJsonRow),
+      games: games.map(parseJsonRow),
       users: [firstUser, secondUser].filter(Boolean).map((user) => ({
         id: user.id,
         displayName: user.display_name,
@@ -339,6 +419,35 @@ app.post("/api/messages", async (request, response, next) => {
   }
 });
 
+app.post("/api/uploads/image", async (request, response, next) => {
+  try {
+    const { coupleId, imageBase64, fileExtension } = request.body;
+    if (!coupleId || !imageBase64) {
+      sendError(response, 400, "Фото заполнено неверно.");
+      return;
+    }
+
+    const couple = await get("SELECT id FROM couples WHERE id = ?", [coupleId]);
+    if (!couple) {
+      sendError(response, 404, "Пара не найдена.");
+      return;
+    }
+
+    const extension = String(fileExtension || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+    const fileName = `${makeId("image")}.${extension}`;
+    const filePath = path.join(uploadsDir, fileName);
+    const imageBuffer = Buffer.from(String(imageBase64), "base64");
+
+    await fs.promises.writeFile(filePath, imageBuffer);
+
+    const protocol = request.get("x-forwarded-proto") || request.protocol;
+    const imageURL = `${protocol}://${request.get("host")}/uploads/${fileName}`;
+    response.json({ imageURL });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/messages/:messageId/reactions", async (request, response, next) => {
   try {
     const row = await get("SELECT json FROM messages WHERE id = ?", [request.params.messageId]);
@@ -356,6 +465,15 @@ app.post("/api/messages/:messageId/reactions", async (request, response, next) =
   }
 });
 
+app.delete("/api/messages/:messageId", async (request, response, next) => {
+  try {
+    await run("DELETE FROM messages WHERE id = ?", [request.params.messageId]);
+    response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/memories", async (request, response, next) => {
   try {
     const { memory } = request.body;
@@ -365,6 +483,29 @@ app.post("/api/memories", async (request, response, next) => {
     }
     await upsertJson("memories", memory.id, memory.coupleId, memory);
     response.json({ memory });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/memories/:memoryId", async (request, response, next) => {
+  try {
+    await run("DELETE FROM memories WHERE id = ?", [request.params.memoryId]);
+    response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/goals", async (request, response, next) => {
+  try {
+    const { goal } = request.body;
+    if (!goal?.id || !goal?.coupleId) {
+      sendError(response, 400, "Цель заполнена неверно.");
+      return;
+    }
+    await upsertJson("goals", goal.id, goal.coupleId, goal, { kind: goal.kind });
+    response.json({ goal });
   } catch (error) {
     next(error);
   }
@@ -386,6 +527,39 @@ app.patch("/api/goals/:goalId", async (request, response, next) => {
     };
     await upsertJson("goals", goal.id, goal.coupleId, goal, { kind: goal.kind });
     response.json({ goal });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/goals/:goalId", async (request, response, next) => {
+  try {
+    await run("DELETE FROM goals WHERE id = ?", [request.params.goalId]);
+    response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/games/:gameId/answers", async (request, response, next) => {
+  try {
+    const row = await get("SELECT json FROM games WHERE id = ?", [request.params.gameId]);
+    if (!row) {
+      sendError(response, 404, "Игра не найдена.");
+      return;
+    }
+
+    const game = parseJsonRow(row);
+    const answer = {
+      id: makeId("answer"),
+      userId: request.body.userId,
+      text: request.body.answer || "",
+      createdAt: nowISO()
+    };
+    game.answers = [...(game.answers || []), answer];
+    game.completedToday = true;
+    await upsertJson("games", game.id, game.coupleId, game, { kind: game.kind, dayKey: game.dayKey });
+    response.json({ game });
   } catch (error) {
     next(error);
   }

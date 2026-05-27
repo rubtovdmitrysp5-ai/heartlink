@@ -116,6 +116,7 @@ private struct MemoryTimelineCard: View {
 struct MemoryDetailView: View {
     let memoryId: String
     @EnvironmentObject private var firestoreService: FirestoreService
+    @Environment(\.dismiss) private var dismiss
 
     private var memory: Memory? {
         firestoreService.memories.first { $0.id == memoryId }
@@ -153,6 +154,21 @@ struct MemoryDetailView: View {
         }
         .navigationTitle("Воспоминание")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let memory {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        Task {
+                            await firestoreService.deleteMemory(memory)
+                            dismiss()
+                        }
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .accessibilityLabel("������� ������������")
+                }
+            }
+        }
     }
 }
 

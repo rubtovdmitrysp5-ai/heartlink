@@ -46,6 +46,7 @@ final class FirestoreService: ObservableObject {
             messages = response.messages
             memories = response.memories
             goals = response.goals
+            games = response.games
 
             if let partnerSnapshot = response.users.first(where: { $0.id == partner.id }) {
                 partner.currentMood = MoodStatus(rawValue: partnerSnapshot.currentMood) ?? partner.currentMood
@@ -119,6 +120,41 @@ final class FirestoreService: ObservableObject {
         )
 
         await saveMessage(message)
+    }
+
+    func sendImageData(
+        _ imageData: Data?,
+        storageService: StorageService,
+        coupleId: String,
+        authorId: String
+    ) async {
+        let imageURL: URL?
+
+        if isFirebaseEnabled {
+            imageURL = try? await storageService.uploadImageData(
+                imageData,
+                path: "couples/\(coupleId)/messages/\(UUID().uuidString).jpg"
+            )
+        } else {
+            imageURL = try? await uploadLocalImageData(imageData, coupleId: coupleId)
+        }
+
+        await sendImageMessage(imageURL: imageURL, coupleId: coupleId, authorId: authorId)
+    }
+
+    func deleteMessage(_ message: ChatMessage) async {
+        guard isFirebaseEnabled else {
+            messages.removeAll { $0.id == message.id }
+            let _: LocalOKResponse? = try? await localRequest(path: "/api/messages/\(message.id)", method: "DELETE")
+            return
+        }
+
+        try? await Firestore.firestore()
+            .collection("couples")
+            .document(message.coupleId)
+            .collection("messages")
+            .document(message.id)
+            .delete()
     }
 
     func sendVoicePreviewMessage(coupleId: String, authorId: String) async {
@@ -200,6 +236,133 @@ final class FirestoreService: ObservableObject {
             .collection("memories")
             .document(memory.id)
             .setData(memory.dictionary)
+    }
+
+    func addMemoryWithImageData(
+        title: String,
+        note: String,
+        locationName: String,
+        imageData: Data?,
+        storageService: StorageService,
+        userId: String
+    ) async {
+        let imageURL: URL?
+        if isFirebaseEnabled {
+            imageURL = try? await storageService.uploadImageData(
+                imageData,
+                path: "couples/\(couple.id)/memories/\(UUID().uuidString).jpg"
+            )
+        } else {
+            imageURL = try? await uploadLocalImageData(imageData, coupleId: couple.id)
+        }
+
+        await addMemory(
+            title: title,
+            note: note,
+            locationName: locationName,
+            imageURL: imageURL,
+            userId: userId
+        )
+    }
+
+    func deleteMemory(_ memory: Memory) async {
+        guard isFirebaseEnabled else {
+            memories.removeAll { $0.id == memory.id }
+            let _: LocalOKResponse? = try? await localRequest(path: "/api/memories/\(memory.id)", method: "DELETE")
+            return
+        }
+
+        try? await Firestore.firestore()
+            .collection("couples")
+            .document(couple.id)
+            .collection("memories")
+            .document(memory.id)
+            .delete()
+    }
+
+    func createGoal(title: String, detail: String, kind: GoalKind, targetAmount: Double?) async {
+        let goal = CoupleGoal(
+            id: UUID().uuidString,
+            coupleId: couple.id,
+            title: title,
+            detail: detail,
+            kind: kind,
+            progress: 0,
+            targetAmount: targetAmount,
+            currentAmount: targetAmount == nil ? nil : 0,
+            dueDate: nil,
+            isCompleted: false
+        )
+
+        guard isFirebaseEnabled else {
+            if let response: LocalGoalResponse = try? await localRequest(
+                path: "/api/goals",
+                method: "POST",
+                body: LocalGoalRequest(goal: goal)
+            ) {
+                goals.append(response.goal)
+            } else {
+                goals.append(goal)
+            }
+            return
+        }
+
+        try? await Firestore.firestore()
+            .collection("couples")
+            .document(couple.id)
+            .collection("goals")
+            .document(goal.id)
+            .setData(goal.dictionary)
+    }
+
+    func deleteGoal(_ goal: CoupleGoal) async {
+        guard isFirebaseEnabled else {
+            goals.removeAll { $0.id == goal.id }
+            let _: LocalOKResponse? = try? await localRequest(path: "/api/goals/\(goal.id)", method: "DELETE")
+            return
+        }
+
+        try? await Firestore.firestore()
+            .collection("couples")
+            .document(couple.id)
+            .collection("goals")
+            .document(goal.id)
+            .delete()
+    }
+
+    func submitGameAnswer(game: LoveGame, answer: String, userId: String) async {
+        guard isFirebaseEnabled else {
+            if let response: LocalGameResponse = try? await localRequest(
+                path: "/api/games/\(game.id)/answers",
+                method: "POST",
+                body: LocalGameAnswerRequest(userId: userId, answer: answer)
+            ), let index = games.firstIndex(where: { $0.id == game.id }) {
+                games[index] = response.game
+            } else if let index = games.firstIndex(where: { $0.id == game.id }) {
+                games[index].completedToday = true
+            }
+            return
+        }
+    }
+
+    func updateLocalProfile(userId: String, displayName: String, partnerName: String, startedAt: Date) async {
+        let response: PairingSessionResponse? = try? await localRequest(
+            path: "/api/profile",
+            method: "PATCH",
+            body: LocalProfileUpdateRequest(
+                userId: userId,
+                displayName: displayName,
+                partnerName: partnerName,
+                relationshipStartedAt: Self.localISOFormatter.string(from: startedAt)
+            )
+        )
+
+        guard let session = response?.session else { return }
+        partner.displayName = session.partnerName ?? partner.displayName
+        let components = Calendar.current.dateComponents([.day, .month], from: session.relationshipStartedAt ?? startedAt)
+        couple.startedAt = session.relationshipStartedAt ?? startedAt
+        couple.anniversaryDay = components.day ?? couple.anniversaryDay
+        couple.anniversaryMonth = components.month ?? couple.anniversaryMonth
     }
 
     func updateGoalProgress(goal: CoupleGoal, progress: Double) async {
@@ -399,6 +562,22 @@ final class FirestoreService: ObservableObject {
         }
     }
 
+    private func uploadLocalImageData(_ imageData: Data?, coupleId: String) async throws -> URL? {
+        guard let imageData else { return nil }
+
+        let response: LocalImageUploadResponse = try await localRequest(
+            path: "/api/uploads/image",
+            method: "POST",
+            body: LocalImageUploadRequest(
+                coupleId: coupleId,
+                imageBase64: imageData.base64EncodedString(),
+                fileExtension: "jpg"
+            )
+        )
+
+        return URL(string: response.imageURL)
+    }
+
     private func localRequest<Response: Decodable>(
         path: String,
         method: String
@@ -443,6 +622,8 @@ final class FirestoreService: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }()
+
+    private static let localISOFormatter = ISO8601DateFormatter()
 }
 
 private struct EmptyRequest: Encodable {}
@@ -451,6 +632,7 @@ private struct LocalCoupleDataResponse: Decodable {
     let messages: [ChatMessage]
     let memories: [Memory]
     let goals: [CoupleGoal]
+    let games: [LoveGame]
     let users: [LocalUserSnapshot]
 }
 
@@ -472,12 +654,26 @@ private struct LocalReactionRequest: Encodable {
     let reaction: ChatReaction
 }
 
+private struct LocalImageUploadRequest: Encodable {
+    let coupleId: String
+    let imageBase64: String
+    let fileExtension: String
+}
+
+private struct LocalImageUploadResponse: Decodable {
+    let imageURL: String
+}
+
 private struct LocalMemoryRequest: Encodable {
     let memory: Memory
 }
 
 private struct LocalMemoryResponse: Decodable {
     let memory: Memory
+}
+
+private struct LocalGoalRequest: Encodable {
+    let goal: CoupleGoal
 }
 
 private struct LocalGoalProgressRequest: Encodable {
@@ -488,6 +684,26 @@ private struct LocalGoalProgressRequest: Encodable {
 
 private struct LocalGoalResponse: Decodable {
     let goal: CoupleGoal
+}
+
+private struct LocalGameAnswerRequest: Encodable {
+    let userId: String
+    let answer: String
+}
+
+private struct LocalGameResponse: Decodable {
+    let game: LoveGame
+}
+
+private struct LocalProfileUpdateRequest: Encodable {
+    let userId: String
+    let displayName: String
+    let partnerName: String
+    let relationshipStartedAt: String
+}
+
+private struct LocalOKResponse: Decodable {
+    let ok: Bool
 }
 
 private struct LocalMoodRequest: Encodable {
@@ -623,6 +839,31 @@ private extension Memory {
 }
 
 private extension CoupleGoal {
+    var dictionary: [String: Any] {
+        var data: [String: Any] = [
+            "coupleId": coupleId,
+            "title": title,
+            "detail": detail,
+            "kind": kind.rawValue,
+            "progress": progress,
+            "isCompleted": isCompleted
+        ]
+
+        if let targetAmount {
+            data["targetAmount"] = targetAmount
+        }
+
+        if let currentAmount {
+            data["currentAmount"] = currentAmount
+        }
+
+        if let dueDate {
+            data["dueDate"] = Timestamp(date: dueDate)
+        }
+
+        return data
+    }
+
     init?(data: [String: Any], id: String) {
         guard
             let coupleId = data["coupleId"] as? String,

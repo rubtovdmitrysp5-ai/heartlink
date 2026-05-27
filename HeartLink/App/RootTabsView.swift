@@ -46,6 +46,12 @@ private extension View {
             case .addMemory:
                 AddMemoryView()
                     .presentationDetents([.medium, .large])
+            case .addGoal:
+                AddGoalView()
+                    .presentationDetents([.medium, .large])
+            case .profile:
+                PairProfileView()
+                    .presentationDetents([.medium, .large])
             case .settings:
                 SecuritySettingsView()
                     .presentationDetents([.medium])

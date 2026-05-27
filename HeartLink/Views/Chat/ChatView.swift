@@ -28,6 +28,11 @@ struct ChatView: View {
                                         Task {
                                             await viewModel.react(emoji, message: message, using: firestoreService, authorId: currentUser.id)
                                         }
+                                    },
+                                    onDelete: {
+                                        Task {
+                                            await firestoreService.deleteMessage(message)
+                                        }
                                     }
                                 )
                                 .id(message.id)
@@ -69,6 +74,12 @@ struct ChatView: View {
                 } label: {
                     Label("Закрыть", systemImage: "chevron.left")
                 }
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                await firestoreService.refreshLocalCoupleData()
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
         .onChange(of: selectedPhoto) { _, newValue in
@@ -126,6 +137,7 @@ private struct MessageBubble: View {
     let message: ChatMessage
     let isMine: Bool
     let onReact: (String) -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         HStack {
@@ -156,6 +168,8 @@ private struct MessageBubble: View {
                         Button("Огонь 🔥") { onReact("🔥") }
                         Button("Нежность 🥰") { onReact("🥰") }
                         Button("Искра ✨") { onReact("✨") }
+                        Divider()
+                        Button("Удалить", role: .destructive) { onDelete() }
                     } label: {
                         Image(systemName: "face.smiling")
                             .font(.caption)
