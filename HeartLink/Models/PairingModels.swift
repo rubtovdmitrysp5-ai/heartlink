@@ -13,6 +13,8 @@ struct LocalPairingSession: Codable, Equatable {
     var partnerId: String?
     var displayName: String?
     var partnerName: String?
+    var avatarURL: URL?
+    var partnerAvatarURL: URL?
     var relationshipStartedAt: Date?
     var setupComplete: Bool
 

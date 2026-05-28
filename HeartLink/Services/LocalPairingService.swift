@@ -201,6 +201,8 @@ final class LocalPairingService: ObservableObject {
             partnerId: nil,
             displayName: nil,
             partnerName: nil,
+            avatarURL: nil,
+            partnerAvatarURL: nil,
             relationshipStartedAt: nil,
             setupComplete: false
         )

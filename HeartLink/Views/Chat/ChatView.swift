@@ -45,6 +45,15 @@ struct ChatView: View {
                                     }
                                 )
                                 .id(message.id)
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        Task {
+                                            await firestoreService.deleteMessage(message)
+                                        }
+                                    } label: {
+                                        Label("Удалить", systemImage: "trash")
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, 16)
@@ -62,10 +71,11 @@ struct ChatView: View {
                     draft: $viewModel.draft,
                     selectedPhoto: $selectedPhoto,
                     isSending: viewModel.isSending || viewModel.isUploadingImage,
+                    isRecordingVoice: viewModel.isRecordingVoice,
                     sendText: {
                         Task {
                             if viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                await viewModel.sendVoicePreview(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
+                                await viewModel.toggleVoiceRecording(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
                             } else {
                                 await viewModel.send(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
                             }
@@ -254,10 +264,10 @@ private struct MessageBubble: View {
                     }
 
                     Menu {
-                        Button("Сердце") { onReact("❤️") }
-                        Button("Огонь") { onReact("🔥") }
-                        Button("Нежность") { onReact("🥰") }
-                        Button("Искра") { onReact("✨") }
+                        Button("❤️") { onReact("❤️") }
+                        Button("🔥") { onReact("🔥") }
+                        Button("🥰") { onReact("🥰") }
+                        Button("✨") { onReact("✨") }
                         Divider()
                         Button("Удалить", role: .destructive) { onDelete() }
                     } label: {
@@ -348,46 +358,61 @@ private struct ChatComposer: View {
     @Binding var draft: String
     @Binding var selectedPhoto: PhotosPickerItem?
     let isSending: Bool
+    let isRecordingVoice: Bool
     let sendText: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                Image(systemName: "photo.on.rectangle")
-                    .font(.headline)
-                    .frame(width: 38, height: 38)
-            }
-            .buttonStyle(.plain)
-            .disabled(isSending)
-            .accessibilityLabel("Выбрать фото")
-
-            TextField("Напишите нежное сообщение", text: $draft, axis: .vertical)
-                .lineLimit(1...4)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .disabled(isSending)
-
-            Button {
-                sendText()
-            } label: {
-                ZStack {
+        VStack(spacing: 8) {
+            if isRecordingVoice {
+                HStack(spacing: 8) {
                     Circle()
-                        .fill(LinearGradient(colors: [.pink, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    if isSending {
-                        ProgressView()
-                            .tint(.white)
-                    } else {
-                        Image(systemName: draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic.fill" : "paperplane.fill")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                    }
+                        .fill(.red)
+                        .frame(width: 8, height: 8)
+                    Text("Идёт запись. Нажмите микрофон ещё раз, чтобы отправить.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                .frame(width: 40, height: 40)
             }
-            .buttonStyle(.plain)
-            .disabled(isSending)
-            .accessibilityLabel(draft.isEmpty ? "Голосовое сообщение" : "Отправить")
+
+            HStack(spacing: 10) {
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.headline)
+                        .frame(width: 38, height: 38)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSending || isRecordingVoice)
+                .accessibilityLabel("Выбрать фото")
+
+                TextField("Напишите нежное сообщение", text: $draft, axis: .vertical)
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .disabled(isSending || isRecordingVoice)
+
+                Button {
+                    sendText()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(isRecordingVoice ? AnyShapeStyle(Color.red.gradient) : AnyShapeStyle(LinearGradient(colors: [.pink, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)))
+                        if isSending {
+                            ProgressView()
+                                .tint(.white)
+                        } else {
+                            Image(systemName: isRecordingVoice ? "stop.fill" : (draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mic.fill" : "paperplane.fill"))
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .frame(width: 40, height: 40)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSending)
+                .accessibilityLabel(draft.isEmpty ? "Голосовое сообщение" : "Отправить")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

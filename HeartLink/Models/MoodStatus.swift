@@ -11,16 +11,16 @@ enum MoodStatus: String, Codable, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
-        case .happy: "Счастлива"
+        case .happy: "Радость"
         case .sad: "Грустно"
         case .missYou: "Скучаю"
-        case .busy: "Занята"
+        case .busy: "Занят"
         }
     }
 
     var partnerTitle: String {
         switch self {
-        case .happy: "Счастлив"
+        case .happy: "Радуется"
         case .sad: "Грустит"
         case .missYou: "Скучает"
         case .busy: "Занят"
@@ -45,4 +45,3 @@ enum MoodStatus: String, Codable, CaseIterable, Identifiable, Hashable {
         }
     }
 }
-

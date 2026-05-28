@@ -103,6 +103,20 @@ final class AuthenticationService: ObservableObject {
         state = .signedIn(user)
     }
 
+    func updateLocalUser(displayName: String? = nil, avatarURL: URL? = nil, mood: MoodStatus? = nil) {
+        guard case .signedIn(var user) = state else { return }
+        if let displayName {
+            user.displayName = displayName
+        }
+        if let avatarURL {
+            user.avatarURL = avatarURL
+        }
+        if let mood {
+            user.currentMood = mood
+        }
+        state = .signedIn(user)
+    }
+
     private func fetchProfile(userId: String, email: String) async throws -> UserProfile {
         let snapshot = try await Firestore.firestore().collection("users").document(userId).getDocument()
         let data = snapshot.data() ?? [:]

@@ -9,7 +9,9 @@ final class ChatViewModel: ObservableObject {
     @Published var selectedImageData: Data?
     @Published var isSending = false
     @Published var isUploadingImage = false
+    @Published var isRecordingVoice = false
     @Published var errorMessage: String?
+    private var voiceStartedAt: Date?
 
     func send(using service: FirestoreService, coupleId: String, authorId: String) async {
         let text = draft
@@ -30,6 +32,20 @@ final class ChatViewModel: ObservableObject {
         isSending = true
         await service.sendVoicePreviewMessage(coupleId: coupleId, authorId: authorId)
         isSending = false
+    }
+
+    func toggleVoiceRecording(using service: FirestoreService, coupleId: String, authorId: String) async {
+        if isRecordingVoice {
+            let duration = Date().timeIntervalSince(voiceStartedAt ?? Date())
+            isRecordingVoice = false
+            voiceStartedAt = nil
+            isSending = true
+            await service.sendVoicePreviewMessage(coupleId: coupleId, authorId: authorId, duration: max(duration, 1))
+            isSending = false
+        } else {
+            voiceStartedAt = Date()
+            isRecordingVoice = true
+        }
     }
 
     func sendImage(

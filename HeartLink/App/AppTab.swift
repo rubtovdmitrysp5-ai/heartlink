@@ -6,7 +6,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case memories
     case goals
     case games
-    case mood
 
     var id: String { rawValue }
 
@@ -25,8 +24,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
             GoalsView()
         case .games:
             GamesView()
-        case .mood:
-            MoodView(currentUser: currentUser)
         }
     }
 
@@ -43,8 +40,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
             Label("Цели", systemImage: "target")
         case .games:
             Label("Игры", systemImage: "sparkles")
-        case .mood:
-            Label("Настрой", systemImage: "face.smiling")
         }
     }
 }

@@ -221,6 +221,8 @@ async function loadSession(userId) {
     partnerId: partner?.id || null,
     displayName: user.display_name,
     partnerName: partner?.display_name || null,
+    avatarURL: user.avatar_url || null,
+    partnerAvatarURL: partner?.avatar_url || null,
     relationshipStartedAt: couple?.started_at || null,
     setupComplete: Boolean(user.display_name && partner?.display_name && couple?.started_at)
   };
@@ -339,7 +341,7 @@ app.post("/api/dev/create-test-partner", async (request, response, next) => {
 
 app.patch("/api/profile", async (request, response, next) => {
   try {
-    const { userId, displayName, partnerName, relationshipStartedAt } = request.body;
+    const { userId, displayName, partnerName, relationshipStartedAt, avatarURL, partnerAvatarURL } = request.body;
     const session = await loadSession(userId);
 
     if (!session || !session.coupleId || !session.partnerId) {
@@ -349,6 +351,12 @@ app.patch("/api/profile", async (request, response, next) => {
 
     await run("UPDATE users SET display_name = ? WHERE id = ?", [displayName || "Вы", userId]);
     await run("UPDATE users SET display_name = ? WHERE id = ?", [partnerName || "Партнер", session.partnerId]);
+    if (avatarURL !== undefined) {
+      await run("UPDATE users SET avatar_url = ? WHERE id = ?", [avatarURL || null, userId]);
+    }
+    if (partnerAvatarURL !== undefined) {
+      await run("UPDATE users SET avatar_url = ? WHERE id = ?", [partnerAvatarURL || null, session.partnerId]);
+    }
     await run("UPDATE couples SET started_at = ? WHERE id = ?", [relationshipStartedAt || nowISO(), session.coupleId]);
 
     response.json({ session: await loadSession(userId) });
@@ -386,8 +394,8 @@ app.get("/api/couple/:coupleId/data", async (request, response, next) => {
     const memories = await all("SELECT json FROM memories WHERE couple_id = ? ORDER BY date DESC", [coupleId]);
     const goals = await all("SELECT json FROM goals WHERE couple_id = ? ORDER BY kind ASC", [coupleId]);
     const games = await all("SELECT json FROM games WHERE couple_id = ? ORDER BY kind ASC", [coupleId]);
-    const firstUser = await get("SELECT id, display_name, current_mood FROM users WHERE id = ?", [couple.first_user_id]);
-    const secondUser = await get("SELECT id, display_name, current_mood FROM users WHERE id = ?", [couple.second_user_id]);
+    const firstUser = await get("SELECT id, display_name, current_mood, avatar_url FROM users WHERE id = ?", [couple.first_user_id]);
+    const secondUser = await get("SELECT id, display_name, current_mood, avatar_url FROM users WHERE id = ?", [couple.second_user_id]);
 
     response.json({
       messages: messages.map(parseJsonRow),
@@ -397,7 +405,8 @@ app.get("/api/couple/:coupleId/data", async (request, response, next) => {
       users: [firstUser, secondUser].filter(Boolean).map((user) => ({
         id: user.id,
         displayName: user.display_name,
-        currentMood: user.current_mood || "happy"
+        currentMood: user.current_mood || "happy",
+        avatarURL: user.avatar_url || null
       }))
     });
   } catch (error) {

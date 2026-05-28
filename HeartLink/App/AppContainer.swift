@@ -40,7 +40,7 @@ final class AppContainer: ObservableObject {
             id: session.userId,
             displayName: session.displayName ?? "Вы",
             email: "",
-            avatarURL: nil,
+            avatarURL: session.avatarURL,
             currentMood: .happy,
             partnerId: session.partnerId,
             coupleId: session.coupleId,
@@ -49,9 +49,9 @@ final class AppContainer: ObservableObject {
 
         let partner = UserProfile(
             id: session.partnerId ?? "partner-local",
-            displayName: session.partnerName ?? "Партнер",
+            displayName: session.partnerName ?? "Партнёр",
             email: "",
-            avatarURL: nil,
+            avatarURL: session.partnerAvatarURL,
             currentMood: .missYou,
             partnerId: session.userId,
             coupleId: session.coupleId,

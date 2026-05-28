@@ -1,14 +1,21 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct PairProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var authenticationService: AuthenticationService
     @EnvironmentObject private var firestoreService: FirestoreService
+    @EnvironmentObject private var storageService: StorageService
     @EnvironmentObject private var localPairingService: LocalPairingService
 
     @State private var displayName = ""
     @State private var partnerName = ""
     @State private var startedAt = Date()
+    @State private var avatarURL: URL?
+    @State private var partnerAvatarURL: URL?
+    @State private var selectedAvatarPhoto: PhotosPickerItem?
+    @State private var selectedPartnerAvatarPhoto: PhotosPickerItem?
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -26,9 +33,9 @@ struct PairProfileView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        SectionTitle("Профиль пары", subtitle: "Имена, дата отношений и подключение", systemImage: "person.2.fill")
+                        SectionTitle("Профиль пары", subtitle: "Имена, аватарки и подключение", systemImage: "person.2.fill")
 
-                        pairPreview
+                        avatarPickerCard
 
                         GlassCard {
                             VStack(spacing: 12) {
@@ -58,17 +65,7 @@ struct PairProfileView: View {
                     Button("Закрыть") { dismiss() }
                 }
             }
-            .onAppear {
-                if displayName.isEmpty {
-                    if case .signedIn(let user) = authenticationService.state {
-                        displayName = user.displayName
-                    } else {
-                        displayName = localPairingService.session?.displayName ?? ""
-                    }
-                    partnerName = firestoreService.partner.displayName
-                    startedAt = firestoreService.couple.startedAt
-                }
-            }
+            .onAppear(perform: loadInitialValues)
             .alert("Ошибка", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -82,13 +79,27 @@ struct PairProfileView: View {
         }
     }
 
-    private var pairPreview: some View {
+    private var avatarPickerCard: some View {
         GlassCard {
             HStack(spacing: 14) {
-                avatar(displayName.isEmpty ? "Вы" : displayName, colors: [.pink, .purple])
+                AvatarPicker(
+                    title: "Вы",
+                    name: displayName.isEmpty ? "Вы" : displayName,
+                    url: avatarURL,
+                    selection: $selectedAvatarPhoto,
+                    colors: [.pink, .purple]
+                )
+
                 Image(systemName: "heart.fill")
                     .foregroundStyle(.pink)
-                avatar(partnerName.isEmpty ? "Партнёр" : partnerName, colors: [.indigo, .purple])
+
+                AvatarPicker(
+                    title: "Партнёр",
+                    name: partnerName.isEmpty ? "Партнёр" : partnerName,
+                    url: partnerAvatarURL,
+                    selection: $selectedPartnerAvatarPhoto,
+                    colors: [.indigo, .purple]
+                )
 
                 Spacer()
 
@@ -134,23 +145,22 @@ struct PairProfileView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-
-                Text("Если сервер недоступен, чат и фото не будут синхронизироваться между устройствами.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private func avatar(_ name: String, colors: [Color]) -> some View {
-        Text(String(name.prefix(1)).uppercased())
-            .font(.headline.bold())
-            .foregroundStyle(.white)
-            .frame(width: 54, height: 54)
-            .background(
-                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: Circle()
-            )
+    private func loadInitialValues() {
+        guard displayName.isEmpty else { return }
+        if case .signedIn(let user) = authenticationService.state {
+            displayName = user.displayName
+            avatarURL = user.avatarURL
+        } else {
+            displayName = localPairingService.session?.displayName ?? ""
+            avatarURL = localPairingService.session?.avatarURL
+        }
+        partnerName = firestoreService.partner.displayName
+        partnerAvatarURL = firestoreService.partner.avatarURL
+        startedAt = firestoreService.couple.startedAt
     }
 
     private func save() async {
@@ -164,11 +174,16 @@ struct PairProfileView: View {
         isSaving = true
         defer { isSaving = false }
 
+        let newAvatarURL = await uploadSelectedAvatar(selectedAvatarPhoto) ?? avatarURL
+        let newPartnerAvatarURL = await uploadSelectedAvatar(selectedPartnerAvatarPhoto) ?? partnerAvatarURL
+
         await firestoreService.updateLocalProfile(
             userId: currentUserId,
             displayName: trimmedName,
             partnerName: trimmedPartnerName,
-            startedAt: startedAt
+            startedAt: startedAt,
+            avatarURL: newAvatarURL,
+            partnerAvatarURL: newPartnerAvatarURL
         )
 
         try? await localPairingService.completeSetup(
@@ -177,7 +192,36 @@ struct PairProfileView: View {
             startedAt: startedAt
         )
 
+        authenticationService.updateLocalUser(displayName: trimmedName, avatarURL: newAvatarURL)
+        avatarURL = newAvatarURL
+        partnerAvatarURL = newPartnerAvatarURL
         dismiss()
+    }
+
+    private func uploadSelectedAvatar(_ item: PhotosPickerItem?) async -> URL? {
+        guard let data = try? await item?.loadTransferable(type: Data.self) else { return nil }
+        let compressedData = Self.compressImageData(data) ?? data
+        return await firestoreService.uploadAvatarImageData(compressedData, storageService: storageService)
+    }
+
+    private static func compressImageData(_ data: Data) -> Data? {
+        guard let image = UIImage(data: data), let cgImage = image.cgImage else { return nil }
+        let size = CGSize(width: 512, height: 512)
+        let imageWidth = CGFloat(cgImage.width)
+        let imageHeight = CGFloat(cgImage.height)
+        let side = min(imageWidth, imageHeight)
+        let cropRect = CGRect(
+            x: (imageWidth - side) / 2,
+            y: (imageHeight - side) / 2,
+            width: side,
+            height: side
+        )
+        let squareImage = cgImage.cropping(to: cropRect).map { UIImage(cgImage: $0, scale: image.scale, orientation: image.imageOrientation) } ?? image
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let resized = renderer.image { _ in
+            squareImage.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.82)
     }
 
     private func profileField(_ title: String, text: Binding<String>) -> some View {
@@ -191,9 +235,59 @@ struct PairProfileView: View {
     }
 }
 
+private struct AvatarPicker: View {
+    let title: String
+    let name: String
+    let url: URL?
+    @Binding var selection: PhotosPickerItem?
+    let colors: [Color]
+
+    var body: some View {
+        PhotosPicker(selection: $selection, matching: .images) {
+            VStack(spacing: 8) {
+                AvatarImage(name: name, url: url, colors: colors, size: 62)
+                Label(title, systemImage: "camera.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Выбрать аватар \(title.lowercased())")
+    }
+}
+
+struct AvatarImage: View {
+    let name: String
+    let url: URL?
+    let colors: [Color]
+    var size: CGFloat = 44
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            default:
+                ZStack {
+                    LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+                    Text(String(name.prefix(1)).uppercased())
+                        .font(.system(size: size * 0.38, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.background, lineWidth: 3))
+    }
+}
+
 #Preview {
     PairProfileView()
         .environmentObject(AuthenticationService(isFirebaseEnabled: false))
         .environmentObject(FirestoreService(isFirebaseEnabled: false))
+        .environmentObject(StorageService(isFirebaseEnabled: false))
         .environmentObject(LocalPairingService())
 }

@@ -58,6 +58,7 @@ final class FirestoreService: ObservableObject {
                 if let displayName = partnerSnapshot.displayName, !displayName.isEmpty {
                     partner.displayName = displayName
                 }
+                partner.avatarURL = partnerSnapshot.avatarURL
             }
         } catch {
             lastErrorMessage = "Сервер недоступен. Проверьте подключение."
@@ -176,7 +177,7 @@ final class FirestoreService: ObservableObject {
             .delete()
     }
 
-    func sendVoicePreviewMessage(coupleId: String, authorId: String) async {
+    func sendVoicePreviewMessage(coupleId: String, authorId: String, duration: TimeInterval = 12) async {
         let message = ChatMessage(
             id: UUID().uuidString,
             coupleId: coupleId,
@@ -184,7 +185,7 @@ final class FirestoreService: ObservableObject {
             text: "Голосовое сообщение",
             kind: .voice,
             mediaURL: nil,
-            voiceDuration: 12,
+            voiceDuration: max(1, duration),
             reactions: [],
             sentAt: .now,
             isRead: false
@@ -490,7 +491,25 @@ final class FirestoreService: ObservableObject {
         return false
     }
 
-    func updateLocalProfile(userId: String, displayName: String, partnerName: String, startedAt: Date) async {
+    func uploadAvatarImageData(_ imageData: Data?, storageService: StorageService) async -> URL? {
+        guard let imageData else { return nil }
+        if isFirebaseEnabled {
+            return try? await storageService.uploadImageData(
+                imageData,
+                path: "couples/\(couple.id)/avatars/\(UUID().uuidString).jpg"
+            )
+        }
+        return try? await uploadLocalImageData(imageData, coupleId: couple.id)
+    }
+
+    func updateLocalProfile(
+        userId: String,
+        displayName: String,
+        partnerName: String,
+        startedAt: Date,
+        avatarURL: URL? = nil,
+        partnerAvatarURL: URL? = nil
+    ) async {
         let response: PairingSessionResponse? = try? await localRequest(
             path: "/api/profile",
             method: "PATCH",
@@ -498,12 +517,15 @@ final class FirestoreService: ObservableObject {
                 userId: userId,
                 displayName: displayName,
                 partnerName: partnerName,
-                relationshipStartedAt: Self.localISOFormatter.string(from: startedAt)
+                relationshipStartedAt: Self.localISOFormatter.string(from: startedAt),
+                avatarURL: avatarURL?.absoluteString,
+                partnerAvatarURL: partnerAvatarURL?.absoluteString
             )
         )
 
         guard let session = response?.session else { return }
         partner.displayName = session.partnerName ?? partner.displayName
+        partner.avatarURL = session.partnerAvatarURL ?? partnerAvatarURL ?? partner.avatarURL
         let components = Calendar.current.dateComponents([.day, .month], from: session.relationshipStartedAt ?? startedAt)
         couple.startedAt = session.relationshipStartedAt ?? startedAt
         couple.anniversaryDay = components.day ?? couple.anniversaryDay
@@ -794,6 +816,7 @@ private struct LocalUserSnapshot: Decodable {
     let id: String
     let displayName: String?
     let currentMood: String
+    let avatarURL: URL?
 }
 
 private struct LocalMessageRequest: Encodable {
@@ -854,6 +877,8 @@ private struct LocalProfileUpdateRequest: Encodable {
     let displayName: String
     let partnerName: String
     let relationshipStartedAt: String
+    let avatarURL: String?
+    let partnerAvatarURL: String?
 }
 
 private struct LocalOKResponse: Decodable {

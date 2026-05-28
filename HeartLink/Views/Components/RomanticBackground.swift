@@ -16,7 +16,7 @@ struct RomanticBackground: View {
 }
 
 struct GlassCard<Content: View>: View {
-    var cornerRadius: CGFloat = 28
+    var cornerRadius: CGFloat = 24
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -27,7 +27,7 @@ struct GlassCard<Content: View>: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(.white.opacity(0.26), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.08), radius: 18, x: 0, y: 10)
+            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -123,4 +123,3 @@ struct EmptyStateView: View {
         }
     }
 }
-

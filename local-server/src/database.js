@@ -65,6 +65,7 @@ async function init() {
   `);
 
   await addColumnIfMissing("ALTER TABLE users ADD COLUMN current_mood TEXT DEFAULT 'happy'");
+  await addColumnIfMissing("ALTER TABLE users ADD COLUMN avatar_url TEXT");
 
   await run(`
     CREATE TABLE IF NOT EXISTS couples (
