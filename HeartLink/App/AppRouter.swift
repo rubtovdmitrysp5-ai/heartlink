@@ -41,6 +41,7 @@ enum Route: Hashable {
     case memory(String)
     case goal(String)
     case game(String)
+    case adultGames
 }
 
 enum SheetDestination: Identifiable, Hashable {

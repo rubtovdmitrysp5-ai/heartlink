@@ -52,6 +52,8 @@ private extension View {
                 GoalDetailView(goalId: id)
             case .game(let id):
                 GameDetailView(gameId: id)
+            case .adultGames:
+                AdultGamesHubView()
             }
         }
     }
