@@ -222,7 +222,12 @@ struct PairProfileView: View {
     }
 
     private func uploadSelectedAvatar(_ item: PhotosPickerItem?, preparedData: Data? = nil) async -> URL? {
-        let data = preparedData ?? (try? await item?.loadTransferable(type: Data.self))
+        let data: Data?
+        if let preparedData {
+            data = preparedData
+        } else {
+            data = try? await item?.loadTransferable(type: Data.self)
+        }
         guard let data else { return nil }
         let compressedData = Self.compressImageData(data) ?? data
         return await firestoreService.uploadAvatarImageData(compressedData, storageService: storageService)
