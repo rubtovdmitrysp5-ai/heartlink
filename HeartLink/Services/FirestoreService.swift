@@ -105,6 +105,9 @@ final class FirestoreService: ObservableObject {
             kind: .text,
             mediaURL: nil,
             voiceDuration: nil,
+            isOneTime: nil,
+            oneTimeDuration: nil,
+            viewedBy: nil,
             reactions: [],
             sentAt: .now,
             isRead: false
@@ -114,7 +117,13 @@ final class FirestoreService: ObservableObject {
     }
 
     @discardableResult
-    func sendImageMessage(imageURL: URL?, coupleId: String, authorId: String) async -> Bool {
+    func sendImageMessage(
+        imageURL: URL?,
+        coupleId: String,
+        authorId: String,
+        isOneTime: Bool = false,
+        oneTimeDuration: TimeInterval? = nil
+    ) async -> Bool {
         guard imageURL != nil else {
             lastErrorMessage = "Фото не загрузилось. Попробуйте ещё раз."
             return false
@@ -128,6 +137,9 @@ final class FirestoreService: ObservableObject {
             kind: .image,
             mediaURL: imageURL,
             voiceDuration: nil,
+            isOneTime: isOneTime ? true : nil,
+            oneTimeDuration: isOneTime ? (oneTimeDuration ?? 10) : nil,
+            viewedBy: isOneTime ? [] : nil,
             reactions: [],
             sentAt: .now,
             isRead: false
@@ -141,7 +153,9 @@ final class FirestoreService: ObservableObject {
         _ imageData: Data?,
         storageService: StorageService,
         coupleId: String,
-        authorId: String
+        authorId: String,
+        isOneTime: Bool = false,
+        oneTimeDuration: TimeInterval? = nil
     ) async -> Bool {
         guard let imageData, !imageData.isEmpty else {
             lastErrorMessage = "Не удалось прочитать фото."
@@ -159,7 +173,13 @@ final class FirestoreService: ObservableObject {
             imageURL = try? await uploadLocalImageData(imageData, coupleId: coupleId)
         }
 
-        return await sendImageMessage(imageURL: imageURL, coupleId: coupleId, authorId: authorId)
+        return await sendImageMessage(
+            imageURL: imageURL,
+            coupleId: coupleId,
+            authorId: authorId,
+            isOneTime: isOneTime,
+            oneTimeDuration: oneTimeDuration
+        )
     }
 
     func deleteMessage(_ message: ChatMessage) async {
@@ -177,6 +197,53 @@ final class FirestoreService: ObservableObject {
             .delete()
     }
 
+    @discardableResult
+    func sendVoiceData(
+        _ audioData: Data?,
+        duration: TimeInterval,
+        storageService: StorageService,
+        coupleId: String,
+        authorId: String
+    ) async -> Bool {
+        guard let audioData, !audioData.isEmpty else {
+            lastErrorMessage = "Не удалось записать голосовое."
+            return false
+        }
+
+        let audioURL: URL?
+        if isFirebaseEnabled {
+            audioURL = try? await storageService.uploadImageData(
+                audioData,
+                path: "couples/\(coupleId)/voice/\(UUID().uuidString).m4a"
+            )
+        } else {
+            audioURL = try? await uploadLocalFileData(audioData, coupleId: coupleId, endpoint: "/api/uploads/audio", fileExtension: "m4a")
+        }
+
+        guard audioURL != nil else {
+            lastErrorMessage = "Голосовое не загрузилось. Проверьте сервер."
+            return false
+        }
+
+        let message = ChatMessage(
+            id: UUID().uuidString,
+            coupleId: coupleId,
+            authorId: authorId,
+            text: "Голосовое сообщение",
+            kind: .voice,
+            mediaURL: audioURL,
+            voiceDuration: max(1, duration),
+            isOneTime: nil,
+            oneTimeDuration: nil,
+            viewedBy: nil,
+            reactions: [],
+            sentAt: .now,
+            isRead: false
+        )
+
+        return await saveMessage(message)
+    }
+
     func sendVoicePreviewMessage(coupleId: String, authorId: String, duration: TimeInterval = 12) async {
         let message = ChatMessage(
             id: UUID().uuidString,
@@ -186,12 +253,37 @@ final class FirestoreService: ObservableObject {
             kind: .voice,
             mediaURL: nil,
             voiceDuration: max(1, duration),
+            isOneTime: nil,
+            oneTimeDuration: nil,
+            viewedBy: nil,
             reactions: [],
             sentAt: .now,
             isRead: false
         )
 
         await saveMessage(message)
+    }
+
+    func markOneTimeMessageViewed(_ message: ChatMessage, userId: String) async {
+        guard message.isOneTime == true, !message.wasViewed(by: userId) else { return }
+
+        guard isFirebaseEnabled else {
+            if let response: LocalMessageResponse = try? await localRequest(
+                path: "/api/messages/\(message.id)/viewed",
+                method: "PATCH",
+                body: LocalMessageViewedRequest(userId: userId)
+            ), let index = messages.firstIndex(where: { $0.id == message.id }) {
+                messages[index] = response.message
+            }
+            return
+        }
+
+        try? await Firestore.firestore()
+            .collection("couples")
+            .document(message.coupleId)
+            .collection("messages")
+            .document(message.id)
+            .updateData(["viewedBy": FieldValue.arrayUnion([userId])])
     }
 
     func addReaction(_ emoji: String, to message: ChatMessage, authorId: String) async {
@@ -224,7 +316,16 @@ final class FirestoreService: ObservableObject {
     }
 
     @discardableResult
-    func addMemory(title: String, note: String, locationName: String, imageURL: URL?, date: Date = .now, userId: String) async -> Bool {
+    func addMemory(
+        title: String,
+        note: String,
+        locationName: String,
+        imageURL: URL?,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
+        date: Date = .now,
+        userId: String
+    ) async -> Bool {
         let memory = Memory(
             id: UUID().uuidString,
             coupleId: couple.id,
@@ -232,8 +333,8 @@ final class FirestoreService: ObservableObject {
             note: note,
             imageURL: imageURL,
             locationName: locationName,
-            latitude: nil,
-            longitude: nil,
+            latitude: latitude,
+            longitude: longitude,
             date: date,
             createdBy: userId
         )
@@ -274,6 +375,8 @@ final class FirestoreService: ObservableObject {
         date: Date,
         imageData: Data?,
         storageService: StorageService,
+        latitude: Double? = nil,
+        longitude: Double? = nil,
         userId: String
     ) async -> Bool {
         let imageURL: URL?
@@ -291,6 +394,8 @@ final class FirestoreService: ObservableObject {
             note: note,
             locationName: locationName,
             imageURL: imageURL,
+            latitude: latitude,
+            longitude: longitude,
             date: date,
             userId: userId
         )
@@ -741,13 +846,17 @@ final class FirestoreService: ObservableObject {
     private func uploadLocalImageData(_ imageData: Data?, coupleId: String) async throws -> URL? {
         guard let imageData else { return nil }
 
+        return try await uploadLocalFileData(imageData, coupleId: coupleId, endpoint: "/api/uploads/image", fileExtension: "jpg")
+    }
+
+    private func uploadLocalFileData(_ fileData: Data, coupleId: String, endpoint: String, fileExtension: String) async throws -> URL? {
         let response: LocalImageUploadResponse = try await localRequest(
-            path: "/api/uploads/image",
+            path: endpoint,
             method: "POST",
             body: LocalImageUploadRequest(
                 coupleId: coupleId,
-                imageBase64: imageData.base64EncodedString(),
-                fileExtension: "jpg"
+                imageBase64: fileData.base64EncodedString(),
+                fileExtension: fileExtension
             )
         )
 
@@ -829,6 +938,10 @@ private struct LocalMessageResponse: Decodable {
 
 private struct LocalReactionRequest: Encodable {
     let reaction: ChatReaction
+}
+
+private struct LocalMessageViewedRequest: Encodable {
+    let userId: String
 }
 
 private struct LocalImageUploadRequest: Encodable {
@@ -934,6 +1047,12 @@ private extension ChatMessage {
             data["voiceDuration"] = voiceDuration
         }
 
+        if isOneTime == true {
+            data["isOneTime"] = true
+            data["oneTimeDuration"] = oneTimeDuration ?? 10
+            data["viewedBy"] = viewedBy ?? []
+        }
+
         return data
     }
 
@@ -956,6 +1075,9 @@ private extension ChatMessage {
             kind: kind,
             mediaURL: (data["mediaURL"] as? String).flatMap(URL.init(string:)),
             voiceDuration: data["voiceDuration"] as? TimeInterval,
+            isOneTime: data["isOneTime"] as? Bool,
+            oneTimeDuration: data["oneTimeDuration"] as? TimeInterval,
+            viewedBy: data["viewedBy"] as? [String],
             reactions: reactionData.compactMap { item in
                 guard let id = item["id"] as? String, let emoji = item["emoji"] as? String, let authorId = item["authorId"] as? String else { return nil }
                 return ChatReaction(id: id, emoji: emoji, authorId: authorId)

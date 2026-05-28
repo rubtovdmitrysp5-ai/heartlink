@@ -20,9 +20,16 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     var kind: MessageKind
     var mediaURL: URL?
     var voiceDuration: TimeInterval?
+    var isOneTime: Bool?
+    var oneTimeDuration: TimeInterval?
+    var viewedBy: [String]?
     var reactions: [ChatReaction]
     var sentAt: Date
     var isRead: Bool
+
+    func wasViewed(by userId: String) -> Bool {
+        viewedBy?.contains(userId) == true
+    }
 
     static let samples: [ChatMessage] = [
         ChatMessage(
@@ -33,6 +40,9 @@ struct ChatMessage: Identifiable, Codable, Hashable {
             kind: .text,
             mediaURL: nil,
             voiceDuration: nil,
+            isOneTime: nil,
+            oneTimeDuration: nil,
+            viewedBy: nil,
             reactions: [ChatReaction(id: "reaction-1", emoji: "❤️", authorId: "user-demo")],
             sentAt: .now.addingTimeInterval(-3600),
             isRead: true
@@ -45,6 +55,9 @@ struct ChatMessage: Identifiable, Codable, Hashable {
             kind: .text,
             mediaURL: nil,
             voiceDuration: nil,
+            isOneTime: nil,
+            oneTimeDuration: nil,
+            viewedBy: nil,
             reactions: [],
             sentAt: .now.addingTimeInterval(-3000),
             isRead: true
@@ -57,10 +70,12 @@ struct ChatMessage: Identifiable, Codable, Hashable {
             kind: .voice,
             mediaURL: nil,
             voiceDuration: 18,
+            isOneTime: nil,
+            oneTimeDuration: nil,
+            viewedBy: nil,
             reactions: [],
             sentAt: .now.addingTimeInterval(-1200),
             isRead: false
         )
     ]
 }
-

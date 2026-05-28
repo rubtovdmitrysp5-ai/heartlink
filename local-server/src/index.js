@@ -12,7 +12,7 @@ fs.mkdirSync(uploadsDir, { recursive: true });
 
 app.set("trust proxy", true);
 app.use(cors());
-app.use(express.json({ limit: "12mb" }));
+app.use(express.json({ limit: "32mb" }));
 app.use(express.static(path.join(__dirname, "..", "public")));
 app.use("/uploads", express.static(uploadsDir));
 
@@ -145,12 +145,8 @@ function todayKey() {
 
 async function seedGamesIfNeeded(coupleId) {
   const dayKey = todayKey();
-  const existing = await get("SELECT id FROM games WHERE couple_id = ? AND day_key = ? LIMIT 1", [coupleId, dayKey]);
-  if (existing) {
-    return;
-  }
-
-  await run("DELETE FROM games WHERE couple_id = ? AND kind = ?", [coupleId, "dailyQuestion"]);
+  const existingRows = await all("SELECT kind FROM games WHERE couple_id = ? AND day_key = ?", [coupleId, dayKey]);
+  const existingKinds = new Set(existingRows.map((row) => row.kind));
 
   const dailyPrompts = [
     "Что сегодня заставило тебя улыбнуться из-за партнера?",
@@ -159,38 +155,68 @@ async function seedGamesIfNeeded(coupleId) {
     "Какой общий момент недели хочется запомнить?"
   ];
   const index = Math.floor(Date.now() / 86400000) % dailyPrompts.length;
-  const games = [
+  const games = [];
+
+  if (!existingKinds.has("dailyQuestion")) {
+    await run("DELETE FROM games WHERE couple_id = ? AND kind = ?", [coupleId, "dailyQuestion"]);
+    games.push(
+      {
+        id: makeId("game"),
+        coupleId,
+        kind: "dailyQuestion",
+        prompt: dailyPrompts[index],
+        options: [],
+        completedToday: false,
+        dayKey,
+        answers: []
+      }
+    );
+  }
+
+  const reusableGames = [
     {
-      id: makeId("game"),
-      coupleId,
-      kind: "dailyQuestion",
-      prompt: dailyPrompts[index],
-      options: [],
-      completedToday: false,
-      dayKey,
-      answers: []
-    },
-    {
-      id: makeId("game"),
-      coupleId,
       kind: "partnerQuiz",
       prompt: "Какой вечер партнер выберет первым?",
-      options: ["Кино дома", "Прогулка", "Ресторан", "Игровой вечер"],
-      completedToday: false,
-      dayKey,
-      answers: []
+      options: ["Кино дома", "Прогулка", "Ресторан", "Игровой вечер"]
     },
     {
-      id: makeId("game"),
-      coupleId,
       kind: "romanticTask",
       prompt: "Отправь короткое сообщение с одной причиной, почему тебе тепло рядом.",
-      options: [],
+      options: []
+    },
+    {
+      kind: "adultTruthOrDare",
+      prompt: "Правда или действие 18+: честный интимный вопрос или нежное действие для партнера. Только по согласию.",
+      options: ["Правда", "Действие", "Пропустить"]
+    },
+    {
+      kind: "adultDrinkOrDare",
+      prompt: "Делай или пей 18+: выполни романтичное задание или сделай глоток. Можно заменить напиток водой.",
+      options: ["Сделаю", "Пью", "Новое задание"]
+    },
+    {
+      kind: "desireCards",
+      prompt: "Карты желаний: выберите действие на вечер и договоритесь о границах.",
+      options: ["Поцелуй", "Массаж", "Комплимент", "Объятия без телефона"]
+    }
+  ];
+
+  for (const game of reusableGames) {
+    if (existingKinds.has(game.kind)) {
+      continue;
+    }
+
+    games.push({
+      id: makeId("game"),
+      coupleId,
+      kind: game.kind,
+      prompt: game.prompt,
+      options: game.options,
       completedToday: false,
       dayKey,
       answers: []
-    }
-  ];
+    });
+  }
 
   for (const game of games) {
     await upsertJson("games", game.id, coupleId, game, { kind: game.kind, dayKey });
@@ -457,6 +483,35 @@ app.post("/api/uploads/image", async (request, response, next) => {
   }
 });
 
+app.post("/api/uploads/audio", async (request, response, next) => {
+  try {
+    const { coupleId, imageBase64, fileExtension } = request.body;
+    if (!coupleId || !imageBase64) {
+      sendError(response, 400, "Аудио заполнено неверно.");
+      return;
+    }
+
+    const couple = await get("SELECT id FROM couples WHERE id = ?", [coupleId]);
+    if (!couple) {
+      sendError(response, 404, "Пара не найдена.");
+      return;
+    }
+
+    const extension = String(fileExtension || "m4a").toLowerCase().replace(/[^a-z0-9]/g, "") || "m4a";
+    const fileName = `${makeId("voice")}.${extension}`;
+    const filePath = path.join(uploadsDir, fileName);
+    const audioBuffer = Buffer.from(String(imageBase64), "base64");
+
+    await fs.promises.writeFile(filePath, audioBuffer);
+
+    const protocol = request.get("x-forwarded-proto") || request.protocol;
+    const audioURL = `${protocol}://${request.get("host")}/uploads/${fileName}`;
+    response.json({ imageURL: audioURL });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/messages/:messageId/reactions", async (request, response, next) => {
   try {
     const row = await get("SELECT json FROM messages WHERE id = ?", [request.params.messageId]);
@@ -467,6 +522,27 @@ app.post("/api/messages/:messageId/reactions", async (request, response, next) =
 
     const message = parseJsonRow(row);
     message.reactions = [...(message.reactions || []), request.body.reaction];
+    await upsertJson("messages", message.id, message.coupleId, message);
+    response.json({ message });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/messages/:messageId/viewed", async (request, response, next) => {
+  try {
+    const row = await get("SELECT json FROM messages WHERE id = ?", [request.params.messageId]);
+    if (!row) {
+      sendError(response, 404, "Сообщение не найдено.");
+      return;
+    }
+
+    const message = parseJsonRow(row);
+    const viewedBy = new Set(message.viewedBy || []);
+    if (request.body.userId) {
+      viewedBy.add(request.body.userId);
+    }
+    message.viewedBy = Array.from(viewedBy);
     await upsertJson("messages", message.id, message.coupleId, message);
     response.json({ message });
   } catch (error) {

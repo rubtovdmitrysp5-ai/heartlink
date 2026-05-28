@@ -16,6 +16,10 @@ struct PairProfileView: View {
     @State private var partnerAvatarURL: URL?
     @State private var selectedAvatarPhoto: PhotosPickerItem?
     @State private var selectedPartnerAvatarPhoto: PhotosPickerItem?
+    @State private var selectedAvatarData: Data?
+    @State private var selectedPartnerAvatarData: Data?
+    @State private var cropItem: ImageCropItem?
+    @State private var cropTarget: AvatarCropTarget?
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -66,6 +70,23 @@ struct PairProfileView: View {
                 }
             }
             .onAppear(perform: loadInitialValues)
+            .onChange(of: selectedAvatarPhoto) { _, newValue in
+                prepareCrop(for: newValue, target: .current)
+            }
+            .onChange(of: selectedPartnerAvatarPhoto) { _, newValue in
+                prepareCrop(for: newValue, target: .partner)
+            }
+            .sheet(item: $cropItem) { item in
+                ImageCropSheet(item: item) { data in
+                    if cropTarget == .current {
+                        selectedAvatarData = data
+                    } else {
+                        selectedPartnerAvatarData = data
+                    }
+                    cropItem = nil
+                    cropTarget = nil
+                }
+            }
             .alert("Ошибка", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -86,6 +107,7 @@ struct PairProfileView: View {
                     title: "Вы",
                     name: displayName.isEmpty ? "Вы" : displayName,
                     url: avatarURL,
+                    previewData: selectedAvatarData,
                     selection: $selectedAvatarPhoto,
                     colors: [.pink, .purple]
                 )
@@ -97,6 +119,7 @@ struct PairProfileView: View {
                     title: "Партнёр",
                     name: partnerName.isEmpty ? "Партнёр" : partnerName,
                     url: partnerAvatarURL,
+                    previewData: selectedPartnerAvatarData,
                     selection: $selectedPartnerAvatarPhoto,
                     colors: [.indigo, .purple]
                 )
@@ -174,8 +197,8 @@ struct PairProfileView: View {
         isSaving = true
         defer { isSaving = false }
 
-        let newAvatarURL = await uploadSelectedAvatar(selectedAvatarPhoto) ?? avatarURL
-        let newPartnerAvatarURL = await uploadSelectedAvatar(selectedPartnerAvatarPhoto) ?? partnerAvatarURL
+        let newAvatarURL = await uploadSelectedAvatar(selectedAvatarPhoto, preparedData: selectedAvatarData) ?? avatarURL
+        let newPartnerAvatarURL = await uploadSelectedAvatar(selectedPartnerAvatarPhoto, preparedData: selectedPartnerAvatarData) ?? partnerAvatarURL
 
         await firestoreService.updateLocalProfile(
             userId: currentUserId,
@@ -198,10 +221,26 @@ struct PairProfileView: View {
         dismiss()
     }
 
-    private func uploadSelectedAvatar(_ item: PhotosPickerItem?) async -> URL? {
-        guard let data = try? await item?.loadTransferable(type: Data.self) else { return nil }
+    private func uploadSelectedAvatar(_ item: PhotosPickerItem?, preparedData: Data? = nil) async -> URL? {
+        let data = preparedData ?? (try? await item?.loadTransferable(type: Data.self))
+        guard let data else { return nil }
         let compressedData = Self.compressImageData(data) ?? data
         return await firestoreService.uploadAvatarImageData(compressedData, storageService: storageService)
+    }
+
+    private func prepareCrop(for item: PhotosPickerItem?, target: AvatarCropTarget) {
+        guard let item else { return }
+        Task {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                cropTarget = target
+                cropItem = ImageCropItem(imageData: data, title: "Кадрировать аватар", aspectRatio: 1, maxPixelSize: 800)
+            }
+            if target == .current {
+                selectedAvatarPhoto = nil
+            } else {
+                selectedPartnerAvatarPhoto = nil
+            }
+        }
     }
 
     private static func compressImageData(_ data: Data) -> Data? {
@@ -239,13 +278,23 @@ private struct AvatarPicker: View {
     let title: String
     let name: String
     let url: URL?
+    let previewData: Data?
     @Binding var selection: PhotosPickerItem?
     let colors: [Color]
 
     var body: some View {
         PhotosPicker(selection: $selection, matching: .images) {
             VStack(spacing: 8) {
-                AvatarImage(name: name, url: url, colors: colors, size: 62)
+                if let previewData, let uiImage = UIImage(data: previewData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 62, height: 62)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(.background, lineWidth: 3))
+                } else {
+                    AvatarImage(name: name, url: url, colors: colors, size: 62)
+                }
                 Label(title, systemImage: "camera.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -254,6 +303,11 @@ private struct AvatarPicker: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Выбрать аватар \(title.lowercased())")
     }
+}
+
+private enum AvatarCropTarget {
+    case current
+    case partner
 }
 
 struct AvatarImage: View {

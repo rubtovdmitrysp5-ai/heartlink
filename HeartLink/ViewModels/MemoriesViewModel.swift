@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreLocation
 
 @MainActor
 final class MemoriesViewModel: ObservableObject {
@@ -25,13 +26,17 @@ final class MemoriesViewModel: ObservableObject {
         isSaving = true
         defer { isSaving = false }
 
+        let place = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let coordinate = await geocode(place)
         let didSave = await firestoreService.addMemoryWithImageData(
             title: title,
             note: note,
-            locationName: locationName.isEmpty ? "Без места" : locationName,
+            locationName: place.isEmpty ? "Без места" : place,
             date: date,
             imageData: imageData,
             storageService: storageService,
+            latitude: coordinate?.latitude,
+            longitude: coordinate?.longitude,
             userId: userId
         )
 
@@ -45,6 +50,12 @@ final class MemoriesViewModel: ObservableObject {
         }
 
         return didSave
+    }
+
+    private func geocode(_ locationName: String) async -> CLLocationCoordinate2D? {
+        guard !locationName.isEmpty, locationName != "Без места" else { return nil }
+        let placemarks = try? await CLGeocoder().geocodeAddressString(locationName)
+        return placemarks?.first?.location?.coordinate
     }
 
     func update(memory: Memory, using service: FirestoreService) async -> Bool {

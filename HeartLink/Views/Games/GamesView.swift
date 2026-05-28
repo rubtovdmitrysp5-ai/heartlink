@@ -10,7 +10,7 @@ struct GamesView: View {
 
             ScrollView {
                 VStack(spacing: 16) {
-                    SectionTitle("Игры любви", subtitle: "Вопросы, квизы и нежные задания", systemImage: "sparkles")
+                    SectionTitle("Игры любви", subtitle: "Вопросы, квизы и игры 18+ для двоих", systemImage: "sparkles")
 
                     DailyQuestionHero(game: firestoreService.games.first { $0.kind == .dailyQuestion })
 
@@ -89,6 +89,14 @@ private struct GameCard: View {
                     HStack(spacing: 8) {
                         Text(game.kind.title)
                             .font(.headline)
+                        if game.kind.isAdult {
+                            Text("18+")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .foregroundStyle(.white)
+                                .background(.red.opacity(0.8), in: Capsule())
+                        }
                         if game.completedToday {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(.green)
@@ -145,6 +153,14 @@ struct GameDetailView: View {
                                 Label(game.kind.title, systemImage: game.kind.symbolName)
                                     .font(.headline)
                                     .foregroundStyle(.pink)
+
+                                if game.kind.isAdult {
+                                    Text("18+. Играйте только по взаимному согласию, без давления и с правом остановиться в любой момент.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(12)
+                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                }
 
                                 Text(game.prompt)
                                     .font(.title2.bold())

@@ -1,6 +1,7 @@
 import MapKit
 import PhotosUI
 import SwiftUI
+import UIKit
 
 struct MemoriesView: View {
     let currentUser: UserProfile
@@ -222,7 +223,9 @@ private struct MemoryThumbnail: View {
             case .success(let image):
                 image
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.regularMaterial)
             default:
                 LinearGradient(colors: [.pink.opacity(0.75), .purple.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay {
@@ -245,7 +248,9 @@ private struct MemoryHeroImage: View {
             case .success(let image):
                 image
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.regularMaterial)
             default:
                 LinearGradient(colors: [.pink, .purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay {
@@ -266,6 +271,8 @@ struct AddMemoryView: View {
     @EnvironmentObject private var storageService: StorageService
     @StateObject private var viewModel = MemoriesViewModel()
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var croppedPhotoData: Data?
+    @State private var cropItem: ImageCropItem?
 
     private var userId: String {
         if case .signedIn(let user) = authenticationService.state {
@@ -279,23 +286,39 @@ struct AddMemoryView: View {
             MemoryEditorContent(
                 viewModel: viewModel,
                 selectedPhoto: $selectedPhoto,
+                selectedImageData: croppedPhotoData,
                 title: "Новое воспоминание",
                 saveTitle: "Сохранить",
                 save: {
-                    let imageData = try? await selectedPhoto?.loadTransferable(type: Data.self)
                     let didSave = await viewModel.save(
-                        imageData: imageData,
+                        imageData: croppedPhotoData,
                         firestoreService: firestoreService,
                         storageService: storageService,
                         userId: userId
                     )
                     if didSave {
                         selectedPhoto = nil
+                        croppedPhotoData = nil
                         dismiss()
                     }
                 },
                 close: { dismiss() }
             )
+            .onChange(of: selectedPhoto) { _, newValue in
+                guard let newValue else { return }
+                Task {
+                    if let data = try? await newValue.loadTransferable(type: Data.self) {
+                        cropItem = ImageCropItem(imageData: data, title: "Кадрировать воспоминание", aspectRatio: 0.8, maxPixelSize: 1800)
+                    }
+                    selectedPhoto = nil
+                }
+            }
+            .sheet(item: $cropItem) { item in
+                ImageCropSheet(item: item) { data in
+                    cropItem = nil
+                    croppedPhotoData = data
+                }
+            }
         }
     }
 }
@@ -311,6 +334,7 @@ private struct EditMemoryView: View {
             MemoryEditorContent(
                 viewModel: viewModel,
                 selectedPhoto: .constant(nil),
+                selectedImageData: nil,
                 title: "Редактировать",
                 saveTitle: "Обновить",
                 allowsPhotoSelection: false,
@@ -333,6 +357,7 @@ private struct EditMemoryView: View {
 private struct MemoryEditorContent: View {
     @ObservedObject var viewModel: MemoriesViewModel
     @Binding var selectedPhoto: PhotosPickerItem?
+    let selectedImageData: Data?
     let title: String
     let saveTitle: String
     var allowsPhotoSelection = true
@@ -347,18 +372,42 @@ private struct MemoryEditorContent: View {
                 VStack(spacing: 14) {
                     if allowsPhotoSelection {
                         PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                            RoundedRectangle(cornerRadius: 26, style: .continuous)
-                                .fill(.ultraThinMaterial)
-                                .frame(height: 154)
-                                .overlay {
+                            ZStack {
+                                if let selectedImageData, let uiImage = UIImage(data: selectedImageData) {
+                                    Image(uiImage: uiImage)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 180)
+                                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                                        .fill(.ultraThinMaterial)
+                                        .frame(height: 154)
+                                        .overlay {
+                                            VStack(spacing: 8) {
+                                                Image(systemName: "photo.badge.plus")
+                                                    .font(.largeTitle)
+                                                Text("Добавить фото")
+                                                    .font(.headline)
+                                            }
+                                            .foregroundStyle(.pink)
+                                        }
+                                }
+
+                                if selectedImageData != nil {
                                     VStack(spacing: 8) {
-                                        Image(systemName: selectedPhoto == nil ? "photo.badge.plus" : "checkmark.circle.fill")
-                                            .font(.largeTitle)
-                                        Text(selectedPhoto == nil ? "Добавить фото" : "Фото выбрано")
-                                            .font(.headline)
+                                        Image(systemName: "crop")
+                                        Text("Изменить кадр")
+                                            .font(.caption.weight(.semibold))
                                     }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(.ultraThinMaterial, in: Capsule())
                                     .foregroundStyle(.pink)
                                 }
+                            }
                         }
                         .buttonStyle(.plain)
                     }
@@ -370,6 +419,10 @@ private struct MemoryEditorContent: View {
                         .heartLinkMemoryField()
                     TextField("Место", text: $viewModel.locationName)
                         .heartLinkMemoryField()
+                    Text("Можно написать адрес или город. При сохранении HeartLink попробует поставить точку на карте.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     DatePicker("Дата", selection: $viewModel.date, displayedComponents: .date)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 13)

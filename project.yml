@@ -48,6 +48,7 @@ targets:
       - package: Firebase
         product: FirebaseCrashlytics
       - sdk: PhotosUI.framework
+      - sdk: AVFoundation.framework
       - sdk: LocalAuthentication.framework
       - sdk: MapKit.framework
       - target: HeartLinkWidgets

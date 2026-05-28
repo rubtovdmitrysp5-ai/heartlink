@@ -1,3 +1,4 @@
+import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -10,7 +11,13 @@ struct ChatView: View {
     @EnvironmentObject private var storageService: StorageService
     @StateObject private var viewModel = ChatViewModel()
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var cropItem: ImageCropItem?
     @State private var openedImage: OpenedChatImage?
+    @State private var oneTimeImage: OneTimeImageItem?
+    @State private var imageSendMode = ChatImageSendMode.normal
+    @State private var oneTimeDuration: TimeInterval = 10
+    @State private var audioPlayer: AVPlayer?
+    @State private var playingMessageId: String?
 
     var body: some View {
         ZStack {
@@ -30,6 +37,8 @@ struct ChatView: View {
                                 MessageBubble(
                                     message: message,
                                     isMine: message.authorId == currentUser.id,
+                                    currentUserId: currentUser.id,
+                                    isPlayingVoice: playingMessageId == message.id,
                                     onReact: { emoji in
                                         Task {
                                             await viewModel.react(emoji, message: message, using: firestoreService, authorId: currentUser.id)
@@ -42,6 +51,12 @@ struct ChatView: View {
                                     },
                                     onOpenImage: { url in
                                         openedImage = OpenedChatImage(url: url)
+                                    },
+                                    onOpenOneTimeImage: {
+                                        oneTimeImage = OneTimeImageItem(message: message)
+                                    },
+                                    onPlayVoice: {
+                                        playVoice(message)
                                     }
                                 )
                                 .id(message.id)
@@ -75,7 +90,12 @@ struct ChatView: View {
                     sendText: {
                         Task {
                             if viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                await viewModel.toggleVoiceRecording(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
+                                await viewModel.toggleVoiceRecording(
+                                    using: firestoreService,
+                                    storageService: storageService,
+                                    coupleId: firestoreService.couple.id,
+                                    authorId: currentUser.id
+                                )
                             } else {
                                 await viewModel.send(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
                             }
@@ -105,8 +125,19 @@ struct ChatView: View {
             guard let newValue else { return }
 
             Task {
-                viewModel.selectedImageData = try? await newValue.loadTransferable(type: Data.self)
+                if let data = try? await newValue.loadTransferable(type: Data.self) {
+                    cropItem = ImageCropItem(imageData: data, title: "Кадрировать фото", aspectRatio: 0.8, maxPixelSize: 1600)
+                }
                 selectedPhoto = nil
+            }
+        }
+        .sheet(item: $cropItem) { item in
+            ImageCropSheet(item: item) { croppedData in
+                cropItem = nil
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 180_000_000)
+                    viewModel.selectedImageData = croppedData
+                }
             }
         }
         .sheet(isPresented: Binding(
@@ -117,6 +148,8 @@ struct ChatView: View {
                 ImagePreviewSheet(
                     imageData: imageData,
                     isSending: viewModel.isUploadingImage,
+                    mode: $imageSendMode,
+                    oneTimeDuration: $oneTimeDuration,
                     send: {
                         Task {
                             await viewModel.sendImage(
@@ -124,8 +157,14 @@ struct ChatView: View {
                                 firestoreService: firestoreService,
                                 storageService: storageService,
                                 coupleId: firestoreService.couple.id,
-                                authorId: currentUser.id
+                                authorId: currentUser.id,
+                                isOneTime: imageSendMode == .oneTime,
+                                oneTimeDuration: oneTimeDuration
                             )
+                            if viewModel.selectedImageData == nil {
+                                imageSendMode = .normal
+                                oneTimeDuration = 10
+                            }
                         }
                     },
                     cancel: {
@@ -137,6 +176,17 @@ struct ChatView: View {
         }
         .fullScreenCover(item: $openedImage) { image in
             FullScreenPhotoView(url: image.url)
+        }
+        .fullScreenCover(item: $oneTimeImage) { item in
+            OneTimePhotoView(
+                message: item.message,
+                currentUserId: currentUser.id,
+                onViewed: {
+                    Task {
+                        await firestoreService.markOneTimeMessageViewed(item.message, userId: currentUser.id)
+                    }
+                }
+            )
         }
         .alert("Ошибка", isPresented: Binding(
             get: { viewModel.errorMessage != nil || firestoreService.lastErrorMessage != nil },
@@ -171,11 +221,39 @@ struct ChatView: View {
             action()
         }
     }
+
+    private func playVoice(_ message: ChatMessage) {
+        guard let url = message.mediaURL else { return }
+        if playingMessageId == message.id {
+            audioPlayer?.pause()
+            audioPlayer = nil
+            playingMessageId = nil
+            return
+        }
+
+        let player = AVPlayer(url: url)
+        audioPlayer = player
+        playingMessageId = message.id
+        player.play()
+        Task { @MainActor in
+            let duration = UInt64(max(message.voiceDuration ?? 1, 1) * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: duration)
+            if playingMessageId == message.id {
+                audioPlayer = nil
+                playingMessageId = nil
+            }
+        }
+    }
 }
 
 private struct OpenedChatImage: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
+}
+
+private struct OneTimeImageItem: Identifiable {
+    let message: ChatMessage
+    var id: String { message.id }
 }
 
 private struct ChatHeader: View {
@@ -235,9 +313,13 @@ private struct MessageDayDivider: View {
 private struct MessageBubble: View {
     let message: ChatMessage
     let isMine: Bool
+    let currentUserId: String
+    let isPlayingVoice: Bool
     let onReact: (String) -> Void
     let onDelete: () -> Void
     let onOpenImage: (URL) -> Void
+    let onOpenOneTimeImage: () -> Void
+    let onPlayVoice: () -> Void
 
     var body: some View {
         HStack {
@@ -293,59 +375,130 @@ private struct MessageBubble: View {
             Text(message.text)
                 .font(.body)
         case .image:
-            VStack(alignment: .leading, spacing: 8) {
+            imageContent
+        case .voice:
+            Button(action: onPlayVoice) {
+                HStack(spacing: 10) {
+                    Image(systemName: isPlayingVoice ? "pause.fill" : "play.fill")
+                        .font(.caption.bold())
+                        .frame(width: 30, height: 30)
+                        .background(.white.opacity(isMine ? 0.22 : 0.14), in: Circle())
+
+                    Capsule()
+                        .fill(.white.opacity(isMine ? 0.5 : 0.22))
+                        .frame(width: 118, height: 5)
+
+                    Text(durationText(message.voiceDuration ?? 0))
+                        .font(.caption.weight(.semibold))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var imageContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if message.isOneTime == true {
+                oneTimeImageContent
+            } else {
+                regularImageContent
+            }
+
+            Text(message.text)
+                .font(.subheadline)
+        }
+    }
+
+    private var regularImageContent: some View {
+        AsyncImage(url: message.mediaURL) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            case .failure:
+                unavailableImagePlaceholder
+            default:
+                loadingImagePlaceholder
+            }
+        }
+        .frame(width: 220, height: 170)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture {
+            if let url = message.mediaURL {
+                onOpenImage(url)
+            }
+        }
+    }
+
+    private var oneTimeImageContent: some View {
+        let viewed = message.wasViewed(by: currentUserId)
+        return ZStack {
+            if viewed {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.white.opacity(0.16))
+                VStack(spacing: 8) {
+                    Image(systemName: "eye.slash.fill")
+                    Text("Фото уже просмотрено")
+                        .font(.caption.weight(.semibold))
+                }
+            } else {
                 AsyncImage(url: message.mediaURL) { phase in
                     switch phase {
                     case .success(let image):
                         image
                             .resizable()
                             .scaledToFill()
+                            .blur(radius: 18)
                     case .failure:
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(.white.opacity(0.22))
-                            .overlay {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "exclamationmark.triangle")
-                                    Text("Фото недоступно")
-                                        .font(.caption)
-                                }
-                            }
+                        unavailableImagePlaceholder
                     default:
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(.white.opacity(0.22))
-                            .overlay {
-                                ProgressView()
-                                    .tint(isMine ? .white : .pink)
-                            }
+                        loadingImagePlaceholder
                     }
                 }
-                .frame(width: 220, height: 170)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .onTapGesture {
-                    if let url = message.mediaURL {
-                        onOpenImage(url)
-                    }
+                VStack(spacing: 8) {
+                    Image(systemName: "1.circle.fill")
+                        .font(.title2)
+                    Text("Один просмотр")
+                        .font(.caption.weight(.bold))
+                    Text("\(Int(message.oneTimeDuration ?? 10)) сек.")
+                        .font(.caption2)
                 }
-
-                Text(message.text)
-                    .font(.subheadline)
-            }
-        case .voice:
-            HStack(spacing: 10) {
-                Image(systemName: "play.fill")
-                    .font(.caption.bold())
-                    .frame(width: 30, height: 30)
-                    .background(.white.opacity(isMine ? 0.22 : 0.14), in: Circle())
-
-                Capsule()
-                    .fill(.white.opacity(isMine ? 0.5 : 0.22))
-                    .frame(width: 118, height: 5)
-
-                Text(durationText(message.voiceDuration ?? 0))
-                    .font(.caption.weight(.semibold))
+                .padding(10)
+                .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .foregroundStyle(.white)
             }
         }
+        .frame(width: 220, height: 170)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .onTapGesture {
+            if !viewed {
+                onOpenOneTimeImage()
+            }
+        }
+    }
+
+    private var unavailableImagePlaceholder: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.white.opacity(0.22))
+            .overlay {
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                    Text("Фото недоступно")
+                        .font(.caption)
+                }
+            }
+    }
+
+    private var loadingImagePlaceholder: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(.white.opacity(0.22))
+            .overlay {
+                ProgressView()
+                    .tint(isMine ? .white : .pink)
+            }
     }
 
     private func durationText(_ duration: TimeInterval) -> String {
@@ -423,6 +576,8 @@ private struct ChatComposer: View {
 private struct ImagePreviewSheet: View {
     let imageData: Data
     let isSending: Bool
+    @Binding var mode: ChatImageSendMode
+    @Binding var oneTimeDuration: TimeInterval
     let send: () -> Void
     let cancel: () -> Void
 
@@ -438,11 +593,36 @@ private struct ImagePreviewSheet: View {
                             .scaledToFit()
                             .frame(maxHeight: 440)
                             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                            .padding(.horizontal, 16)
+                        .padding(.horizontal, 16)
                     } else {
                         EmptyStateView(title: "Фото не открылось", subtitle: "Выберите другое изображение.", systemImage: "photo")
                             .padding(16)
                     }
+
+                    GlassCard {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Picker("Режим фото", selection: $mode) {
+                                ForEach(ChatImageSendMode.allCases) { mode in
+                                    Text(mode.title).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+
+                            if mode == .oneTime {
+                                Picker("Время просмотра", selection: $oneTimeDuration) {
+                                    Text("5 сек").tag(TimeInterval(5))
+                                    Text("10 сек").tag(TimeInterval(10))
+                                    Text("15 сек").tag(TimeInterval(15))
+                                }
+                                .pickerStyle(.segmented)
+
+                                Text("Фото будет заблюрено в чате и откроется только один раз.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
 
                     PrimaryActionButton(title: "Отправить фото", systemImage: "paperplane.fill", isLoading: isSending, action: send)
                         .padding(.horizontal, 16)
@@ -458,6 +638,20 @@ private struct ImagePreviewSheet: View {
                     Button("Отмена", action: cancel)
                 }
             }
+        }
+    }
+}
+
+private enum ChatImageSendMode: String, CaseIterable, Identifiable {
+    case normal
+    case oneTime
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .normal: "Обычное"
+        case .oneTime: "Один раз"
         }
     }
 }
@@ -496,6 +690,89 @@ private struct FullScreenPhotoView: View {
                     .background(.ultraThinMaterial, in: Circle())
             }
             .padding(20)
+        }
+    }
+}
+
+private struct OneTimePhotoView: View {
+    let message: ChatMessage
+    let currentUserId: String
+    let onViewed: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var secondsLeft: Int
+    @State private var isScreenCaptured = UIScreen.main.isCaptured
+
+    init(message: ChatMessage, currentUserId: String, onViewed: @escaping () -> Void) {
+        self.message = message
+        self.currentUserId = currentUserId
+        self.onViewed = onViewed
+        _secondsLeft = State(initialValue: Int(message.oneTimeDuration ?? 10))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            if isScreenCaptured {
+                VStack(spacing: 14) {
+                    Image(systemName: "eye.slash.fill")
+                        .font(.system(size: 52))
+                    Text("Фото скрыто во время записи экрана")
+                        .font(.headline)
+                }
+                .foregroundStyle(.white)
+                .padding(24)
+            } else if let url = message.mediaURL {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    case .failure:
+                        EmptyStateView(title: "Фото недоступно", subtitle: "Проверьте сервер и подключение.", systemImage: "photo")
+                            .padding(24)
+                    default:
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
+            }
+
+            HStack(spacing: 12) {
+                Label("\(secondsLeft) сек.", systemImage: "timer")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+            }
+            .padding(20)
+        }
+        .onAppear {
+            onViewed()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIScreen.capturedDidChangeNotification)) { _ in
+            isScreenCaptured = UIScreen.main.isCaptured
+        }
+        .task {
+            while secondsLeft > 0 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                secondsLeft -= 1
+            }
+            dismiss()
         }
     }
 }

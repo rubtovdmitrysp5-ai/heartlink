@@ -16,18 +16,28 @@ struct RomanticBackground: View {
 }
 
 struct GlassCard<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
     var cornerRadius: CGFloat = 24
     @ViewBuilder var content: Content
 
     var body: some View {
         content
             .padding(18)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .background(
+                cardFill,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(.white.opacity(0.26), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+            .shadow(color: .black.opacity(colorScheme == .dark ? 0.18 : 0.04), radius: 6, x: 0, y: 3)
+    }
+
+    private var cardFill: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.08)
+            : Color.white.opacity(0.58)
     }
 }
 

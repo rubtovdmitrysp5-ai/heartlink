@@ -11,7 +11,7 @@ final class ChatViewModel: ObservableObject {
     @Published var isUploadingImage = false
     @Published var isRecordingVoice = false
     @Published var errorMessage: String?
-    private var voiceStartedAt: Date?
+    private let voiceRecorder = VoiceRecorder()
 
     func send(using service: FirestoreService, coupleId: String, authorId: String) async {
         let text = draft
@@ -28,24 +28,41 @@ final class ChatViewModel: ObservableObject {
         }
     }
 
-    func sendVoicePreview(using service: FirestoreService, coupleId: String, authorId: String) async {
-        isSending = true
-        await service.sendVoicePreviewMessage(coupleId: coupleId, authorId: authorId)
-        isSending = false
+    func toggleVoiceRecording(using service: FirestoreService, storageService: StorageService, coupleId: String, authorId: String) async {
+        if isRecordingVoice {
+            do {
+                let recording = try voiceRecorder.stop()
+                isRecordingVoice = false
+                isSending = true
+                let didSend = await service.sendVoiceData(
+                    recording.data,
+                    duration: recording.duration,
+                    storageService: storageService,
+                    coupleId: coupleId,
+                    authorId: authorId
+                )
+                isSending = false
+                if !didSend {
+                    errorMessage = service.lastErrorMessage ?? "Голосовое не отправилось."
+                }
+            } catch {
+                isRecordingVoice = false
+                isSending = false
+                errorMessage = "Не удалось сохранить голосовое."
+            }
+        } else {
+            do {
+                try await voiceRecorder.start()
+                isRecordingVoice = true
+            } catch {
+                errorMessage = "Разрешите доступ к микрофону в настройках iPhone."
+            }
+        }
     }
 
-    func toggleVoiceRecording(using service: FirestoreService, coupleId: String, authorId: String) async {
-        if isRecordingVoice {
-            let duration = Date().timeIntervalSince(voiceStartedAt ?? Date())
-            isRecordingVoice = false
-            voiceStartedAt = nil
-            isSending = true
-            await service.sendVoicePreviewMessage(coupleId: coupleId, authorId: authorId, duration: max(duration, 1))
-            isSending = false
-        } else {
-            voiceStartedAt = Date()
-            isRecordingVoice = true
-        }
+    func cancelVoiceRecording() {
+        voiceRecorder.cancel()
+        isRecordingVoice = false
     }
 
     func sendImage(
@@ -53,7 +70,9 @@ final class ChatViewModel: ObservableObject {
         firestoreService: FirestoreService,
         storageService: StorageService,
         coupleId: String,
-        authorId: String
+        authorId: String,
+        isOneTime: Bool = false,
+        oneTimeDuration: TimeInterval? = nil
     ) async {
         guard let imageData else {
             errorMessage = "Не удалось прочитать фото."
@@ -66,7 +85,9 @@ final class ChatViewModel: ObservableObject {
             compressedData,
             storageService: storageService,
             coupleId: coupleId,
-            authorId: authorId
+            authorId: authorId,
+            isOneTime: isOneTime,
+            oneTimeDuration: oneTimeDuration
         )
         isUploadingImage = false
 
