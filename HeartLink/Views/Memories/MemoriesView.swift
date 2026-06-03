@@ -75,14 +75,15 @@ private struct MemoryMapCard: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if pinnedMemories.isEmpty {
-                    EmptyStateView(
+                Group {
+                    if pinnedMemories.isEmpty {
+                        EmptyStateView(
                         title: "РџРѕРєР° РЅРµС‚ С‚РѕС‡РµРє РЅР° РєР°СЂС‚Рµ",
                         subtitle: "Р”РѕР±Р°РІСЊС‚Рµ РјРµСЃС‚Рѕ РІ РІРѕСЃРїРѕРјРёРЅР°РЅРёРё, Рё HeartLink РїРѕРїС‹С‚Р°РµС‚СЃСЏ РїРѕСЃС‚Р°РІРёС‚СЊ РјРµС‚РєСѓ.",
                         systemImage: "map"
                     )
-                } else {
-                    Map(position: $position) {
+                    } else {
+                        Map(position: $position) {
                         ForEach(pinnedMemories) { memory in
                             if let coordinate = memory.coordinate {
                                 Marker(memory.title, coordinate: coordinate)
@@ -90,9 +91,10 @@ private struct MemoryMapCard: View {
                             }
                         }
                     }
-                    .onAppear(perform: updateCamera)
-                    .onChange(of: pinnedMemories.map(\.id)) { _, _ in
-                        updateCamera()
+                        .onAppear(perform: updateCamera)
+                        .onChange(of: pinnedMemories.map(\.id)) { _, _ in
+                            updateCamera()
+                        }
                     }
                 }
                 .frame(height: 190)
