@@ -136,8 +136,8 @@ struct ChatView: View {
                 }
             )
         }
-        .alert("??????", isPresented: errorAlertBinding) {
-            Button("???????", role: .cancel) {
+        .alert("\u{041E}\u{0448}\u{0438}\u{0431}\u{043A}\u{0430}", isPresented: errorAlertBinding) {
+            Button("\u{041F}\u{043E}\u{043D}\u{044F}\u{0442}\u{043D}\u{043E}", role: .cancel) {
                 viewModel.errorMessage = nil
                 firestoreService.lastErrorMessage = nil
             }
@@ -152,7 +152,6 @@ struct ChatView: View {
             selectedPhoto: $selectedPhoto,
             isSending: viewModel.isSending || viewModel.isUploadingImage,
             isRecordingVoice: viewModel.isRecordingVoice,
-            hasRetryableVoice: viewModel.retryableVoiceRecording != nil,
             sendText: {
                 Task {
                     if viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -167,6 +166,7 @@ struct ChatView: View {
                     }
                 }
             },
+            hasRetryableVoice: viewModel.retryableVoiceRecording != nil,
             retryVoice: {
                 Task {
                     await viewModel.retryVoiceMessage(
@@ -191,7 +191,7 @@ struct ChatView: View {
     }
 
     private var errorAlertMessage: String {
-        viewModel.errorMessage ?? firestoreService.lastErrorMessage ?? "?? ??????? ????????? ????????."
+        viewModel.errorMessage ?? firestoreService.lastErrorMessage ?? "\u{041D}\u{0435} \u{0443}\u{0434}\u{0430}\u{043B}\u{043E}\u{0441}\u{044C} \u{0432}\u{044B}\u{043F}\u{043E}\u{043B}\u{043D}\u{0438}\u{0442}\u{044C} \u{0434}\u{0435}\u{0439}\u{0441}\u{0442}\u{0432}\u{0438}\u{0435}\u{002E}"
     }
 
     @ViewBuilder
@@ -232,7 +232,7 @@ struct ChatView: View {
                     await firestoreService.deleteMessage(message)
                 }
             } label: {
-                Label("???????", systemImage: "trash")
+                Label("\u{0423}\u{0434}\u{0430}\u{043B}\u{0438}\u{0442}\u{044C}", systemImage: "trash")
             }
         }
     }
