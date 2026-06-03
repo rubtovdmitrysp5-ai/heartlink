@@ -1,4 +1,4 @@
-import AVFoundation
+﻿import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -29,45 +29,7 @@ struct ChatView: View {
                     ScrollView {
                         LazyVStack(spacing: 12) {
                             ForEach(Array(firestoreService.messages.enumerated()), id: \.element.id) { index, message in
-                                if shouldShowDate(before: message, at: index) {
-                                    MessageDayDivider(date: message.sentAt)
-                                }
-
-                                MessageBubble(
-                                    message: message,
-                                    isMine: message.authorId == currentUser.id,
-                                    currentUserId: currentUser.id,
-                                    isPlayingVoice: voicePlayer.playingMessageId == message.id,
-                                    onReact: { emoji in
-                                        Task {
-                                            await viewModel.react(emoji, message: message, using: firestoreService, authorId: currentUser.id)
-                                        }
-                                    },
-                                    onDelete: {
-                                        Task {
-                                            await firestoreService.deleteMessage(message)
-                                        }
-                                    },
-                                    onOpenImage: { url in
-                                        openedImage = OpenedChatImage(url: url)
-                                    },
-                                    onOpenOneTimeImage: {
-                                        oneTimeImage = OneTimeImageItem(message: message)
-                                    },
-                                    onPlayVoice: {
-                                        voicePlayer.togglePlayback(for: message)
-                                    }
-                                )
-                                .id(message.id)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        Task {
-                                            await firestoreService.deleteMessage(message)
-                                        }
-                                    } label: {
-                                        Label("РЈРґР°Р»РёС‚СЊ", systemImage: "trash")
-                                    }
-                                }
+                                messageRow(message, index: index)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -81,40 +43,7 @@ struct ChatView: View {
                     }
                 }
 
-                ChatComposer(
-                    draft: $viewModel.draft,
-                    selectedPhoto: $selectedPhoto,
-                    isSending: viewModel.isSending || viewModel.isUploadingImage,
-                    isRecordingVoice: viewModel.isRecordingVoice,
-                    hasRetryableVoice: viewModel.retryableVoiceRecording != nil,
-                    sendText: {
-                        Task {
-                            if viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                await viewModel.toggleVoiceRecording(
-                                    using: firestoreService,
-                                    storageService: storageService,
-                                    coupleId: firestoreService.couple.id,
-                                    authorId: currentUser.id
-                                )
-                            } else {
-                                await viewModel.send(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
-                            }
-                        }
-                    },
-                    retryVoice: {
-                        Task {
-                            await viewModel.retryVoiceMessage(
-                                using: firestoreService,
-                                storageService: storageService,
-                                coupleId: firestoreService.couple.id,
-                                authorId: currentUser.id
-                            )
-                        }
-                    },
-                    cancelRecording: {
-                        viewModel.cancelVoiceRecording()
-                    }
-                )
+                composer
             }
         }
         .navigationTitle("Р›РёС‡РЅС‹Р№ С‡Р°С‚")
@@ -207,16 +136,104 @@ struct ChatView: View {
                 }
             )
         }
-        .alert("РћС€РёР±РєР°", isPresented: Binding(
-            get: { viewModel.errorMessage != nil || firestoreService.lastErrorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil; firestoreService.lastErrorMessage = nil } }
-        )) {
-            Button("РџРѕРЅСЏС‚РЅРѕ", role: .cancel) {
+        .alert("??????", isPresented: errorAlertBinding) {
+            Button("???????", role: .cancel) {
                 viewModel.errorMessage = nil
                 firestoreService.lastErrorMessage = nil
             }
         } message: {
-            Text(viewModel.errorMessage ?? firestoreService.lastErrorMessage ?? "РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ РґРµР№СЃС‚РІРёРµ.")
+            Text(errorAlertMessage)
+        }
+    }
+
+    private var composer: some View {
+        ChatComposer(
+            draft: $viewModel.draft,
+            selectedPhoto: $selectedPhoto,
+            isSending: viewModel.isSending || viewModel.isUploadingImage,
+            isRecordingVoice: viewModel.isRecordingVoice,
+            hasRetryableVoice: viewModel.retryableVoiceRecording != nil,
+            sendText: {
+                Task {
+                    if viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        await viewModel.toggleVoiceRecording(
+                            using: firestoreService,
+                            storageService: storageService,
+                            coupleId: firestoreService.couple.id,
+                            authorId: currentUser.id
+                        )
+                    } else {
+                        await viewModel.send(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
+                    }
+                }
+            },
+            retryVoice: {
+                Task {
+                    await viewModel.retryVoiceMessage(
+                        using: firestoreService,
+                        storageService: storageService,
+                        coupleId: firestoreService.couple.id,
+                        authorId: currentUser.id
+                    )
+                }
+            },
+            cancelRecording: {
+                viewModel.cancelVoiceRecording()
+            }
+        )
+    }
+
+    private var errorAlertBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil || firestoreService.lastErrorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil; firestoreService.lastErrorMessage = nil } }
+        )
+    }
+
+    private var errorAlertMessage: String {
+        viewModel.errorMessage ?? firestoreService.lastErrorMessage ?? "?? ??????? ????????? ????????."
+    }
+
+    @ViewBuilder
+    private func messageRow(_ message: ChatMessage, index: Int) -> some View {
+        if shouldShowDate(before: message, at: index) {
+            MessageDayDivider(date: message.sentAt)
+        }
+
+        MessageBubble(
+            message: message,
+            isMine: message.authorId == currentUser.id,
+            currentUserId: currentUser.id,
+            isPlayingVoice: voicePlayer.playingMessageId == message.id,
+            onReact: { emoji in
+                Task {
+                    await viewModel.react(emoji, message: message, using: firestoreService, authorId: currentUser.id)
+                }
+            },
+            onDelete: {
+                Task {
+                    await firestoreService.deleteMessage(message)
+                }
+            },
+            onOpenImage: { url in
+                openedImage = OpenedChatImage(url: url)
+            },
+            onOpenOneTimeImage: {
+                oneTimeImage = OneTimeImageItem(message: message)
+            },
+            onPlayVoice: {
+                voicePlayer.togglePlayback(for: message)
+            }
+        )
+        .id(message.id)
+        .contextMenu {
+            Button(role: .destructive) {
+                Task {
+                    await firestoreService.deleteMessage(message)
+                }
+            } label: {
+                Label("???????", systemImage: "trash")
+            }
         }
     }
 
@@ -615,7 +632,9 @@ private final class VoiceMessagePlayer: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            self?.stop()
+            Task { @MainActor in
+                self?.stop()
+            }
         }
 
         player.play()
