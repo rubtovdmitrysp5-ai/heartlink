@@ -34,6 +34,8 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
     }
 
     func scheduleDailyLoveQuestionPreview() async {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["daily-love-question"])
+
         let content = UNMutableNotificationContent()
         content.title = "HeartLink"
         content.body = "Новый вопрос дня уже ждёт вас двоих."

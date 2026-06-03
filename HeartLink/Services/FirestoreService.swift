@@ -1,6 +1,9 @@
 import Foundation
 import Combine
 import FirebaseFirestore
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 @MainActor
 final class FirestoreService: ObservableObject {
@@ -8,6 +11,8 @@ final class FirestoreService: ObservableObject {
     private var listeners: [ListenerRegistration] = []
     private var localBaseURLString: String?
     private var localUserId: String?
+    private var lastLocalRefreshAt: Date = .distantPast
+    private let minimumLocalRefreshInterval: TimeInterval = 1.5
 
     @Published var couple: Couple = SampleDataStore.couple
     @Published var partner: UserProfile = SampleDataStore.partner
@@ -34,13 +39,17 @@ final class FirestoreService: ObservableObject {
     func applyLocalPairing(couple: Couple, partner: UserProfile) {
         self.couple = couple
         self.partner = partner
+        updateWidgetSnapshot()
     }
 
     func refreshLocalCoupleData() async {
         guard !isFirebaseEnabled, localBaseURLString != nil else { return }
+        guard !isSyncing else { return }
+        guard Date().timeIntervalSince(lastLocalRefreshAt) >= minimumLocalRefreshInterval else { return }
 
         do {
             isSyncing = true
+            lastLocalRefreshAt = .now
             defer { isSyncing = false }
 
             let response: LocalCoupleDataResponse = try await localRequest(
@@ -60,6 +69,7 @@ final class FirestoreService: ObservableObject {
                 }
                 partner.avatarURL = partnerSnapshot.avatarURL
             }
+            updateWidgetSnapshot()
         } catch {
             lastErrorMessage = "Сервер недоступен. Проверьте подключение."
             if goals.isEmpty {
@@ -417,11 +427,21 @@ final class FirestoreService: ObservableObject {
     }
 
     @discardableResult
-    func updateMemory(_ memory: Memory, title: String, note: String, locationName: String, date: Date) async -> Bool {
+    func updateMemory(
+        _ memory: Memory,
+        title: String,
+        note: String,
+        locationName: String,
+        latitude: Double?,
+        longitude: Double?,
+        date: Date
+    ) async -> Bool {
         var updated = memory
         updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.locationName = locationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Без места" : locationName
+        updated.latitude = latitude
+        updated.longitude = longitude
         updated.date = date
 
         guard !updated.title.isEmpty else {
@@ -635,6 +655,7 @@ final class FirestoreService: ObservableObject {
         couple.startedAt = session.relationshipStartedAt ?? startedAt
         couple.anniversaryDay = components.day ?? couple.anniversaryDay
         couple.anniversaryMonth = components.month ?? couple.anniversaryMonth
+        updateWidgetSnapshot()
     }
 
     func updateGoalProgress(goal: CoupleGoal, progress: Double) async {
@@ -687,6 +708,7 @@ final class FirestoreService: ObservableObject {
                     coupleId: self.couple.id,
                     createdAt: self.partner.createdAt
                 )
+                self.updateWidgetSnapshot()
             }
         }
         listeners.append(listener)
@@ -697,6 +719,7 @@ final class FirestoreService: ObservableObject {
             Task { @MainActor in
                 guard let self, let data = snapshot?.data() else { return }
                 self.couple = Couple(data: data, id: coupleId) ?? self.couple
+                self.updateWidgetSnapshot()
             }
         }
         listeners.append(listener)
@@ -749,6 +772,7 @@ final class FirestoreService: ObservableObject {
     private func loadCoupleAndStreams(for user: UserProfile) async {
         if let loadedCouple = await fetchCouple(for: user) {
             couple = loadedCouple
+            updateWidgetSnapshot()
         }
 
         listenForCouple(coupleId: couple.id)
@@ -806,6 +830,7 @@ final class FirestoreService: ObservableObject {
             coupleId: couple.id,
             createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now
         )
+        updateWidgetSnapshot()
     }
 
     private func removeListeners() {
@@ -907,6 +932,13 @@ final class FirestoreService: ObservableObject {
         encoder.dateEncodingStrategy = .iso8601
         return encoder
     }()
+
+    private func updateWidgetSnapshot() {
+        WidgetSharedStore.update(couple: couple, partner: partner)
+        #if canImport(WidgetKit)
+        WidgetCenter.shared.reloadAllTimelines()
+        #endif
+    }
 
     private static let localISOFormatter = ISO8601DateFormatter()
 }

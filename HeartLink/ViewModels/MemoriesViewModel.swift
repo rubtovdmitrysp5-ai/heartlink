@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CoreLocation
+import MapKit
 
 @MainActor
 final class MemoriesViewModel: ObservableObject {
@@ -27,7 +28,7 @@ final class MemoriesViewModel: ObservableObject {
         defer { isSaving = false }
 
         let place = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let coordinate = await geocode(place)
+        let coordinate = await resolveCoordinate(for: place)
         let didSave = await firestoreService.addMemoryWithImageData(
             title: title,
             note: note,
@@ -52,10 +53,18 @@ final class MemoriesViewModel: ObservableObject {
         return didSave
     }
 
-    private func geocode(_ locationName: String) async -> CLLocationCoordinate2D? {
+    private func resolveCoordinate(for locationName: String) async -> CLLocationCoordinate2D? {
         guard !locationName.isEmpty, locationName != "Без места" else { return nil }
-        let placemarks = try? await CLGeocoder().geocodeAddressString(locationName)
-        return placemarks?.first?.location?.coordinate
+        if let placemarks = try? await CLGeocoder().geocodeAddressString(locationName),
+           let coordinate = placemarks.first?.location?.coordinate {
+            return coordinate
+        }
+
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = locationName
+        request.resultTypes = .pointOfInterest
+        let response = try? await MKLocalSearch(request: request).start()
+        return response?.mapItems.first?.placemark.coordinate
     }
 
     func update(memory: Memory, using service: FirestoreService) async -> Bool {
@@ -67,11 +76,15 @@ final class MemoriesViewModel: ObservableObject {
         isSaving = true
         defer { isSaving = false }
 
+        let place = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let coordinate = await resolveCoordinate(for: place)
         let didSave = await service.updateMemory(
             memory,
             title: title,
             note: note,
-            locationName: locationName,
+            locationName: place,
+            latitude: coordinate?.latitude,
+            longitude: coordinate?.longitude,
             date: date
         )
 

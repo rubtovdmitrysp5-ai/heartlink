@@ -16,8 +16,7 @@ struct ChatView: View {
     @State private var oneTimeImage: OneTimeImageItem?
     @State private var imageSendMode = ChatImageSendMode.normal
     @State private var oneTimeDuration: TimeInterval = 10
-    @State private var audioPlayer: AVPlayer?
-    @State private var playingMessageId: String?
+    @StateObject private var voicePlayer = VoiceMessagePlayer()
 
     var body: some View {
         ZStack {
@@ -38,7 +37,7 @@ struct ChatView: View {
                                     message: message,
                                     isMine: message.authorId == currentUser.id,
                                     currentUserId: currentUser.id,
-                                    isPlayingVoice: playingMessageId == message.id,
+                                    isPlayingVoice: voicePlayer.playingMessageId == message.id,
                                     onReact: { emoji in
                                         Task {
                                             await viewModel.react(emoji, message: message, using: firestoreService, authorId: currentUser.id)
@@ -56,7 +55,7 @@ struct ChatView: View {
                                         oneTimeImage = OneTimeImageItem(message: message)
                                     },
                                     onPlayVoice: {
-                                        playVoice(message)
+                                        voicePlayer.togglePlayback(for: message)
                                     }
                                 )
                                 .id(message.id)
@@ -66,7 +65,7 @@ struct ChatView: View {
                                             await firestoreService.deleteMessage(message)
                                         }
                                     } label: {
-                                        Label("Удалить", systemImage: "trash")
+                                        Label("РЈРґР°Р»РёС‚СЊ", systemImage: "trash")
                                     }
                                 }
                             }
@@ -87,6 +86,7 @@ struct ChatView: View {
                     selectedPhoto: $selectedPhoto,
                     isSending: viewModel.isSending || viewModel.isUploadingImage,
                     isRecordingVoice: viewModel.isRecordingVoice,
+                    hasRetryableVoice: viewModel.retryableVoiceRecording != nil,
                     sendText: {
                         Task {
                             if viewModel.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -100,18 +100,31 @@ struct ChatView: View {
                                 await viewModel.send(using: firestoreService, coupleId: firestoreService.couple.id, authorId: currentUser.id)
                             }
                         }
+                    },
+                    retryVoice: {
+                        Task {
+                            await viewModel.retryVoiceMessage(
+                                using: firestoreService,
+                                storageService: storageService,
+                                coupleId: firestoreService.couple.id,
+                                authorId: currentUser.id
+                            )
+                        }
+                    },
+                    cancelRecording: {
+                        viewModel.cancelVoiceRecording()
                     }
                 )
             }
         }
-        .navigationTitle("Личный чат")
+        .navigationTitle("Р›РёС‡РЅС‹Р№ С‡Р°С‚")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
                     onClose()
                 } label: {
-                    Label("Закрыть", systemImage: "chevron.left")
+                    Label("Р—Р°РєСЂС‹С‚СЊ", systemImage: "chevron.left")
                 }
             }
         }
@@ -121,12 +134,18 @@ struct ChatView: View {
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
             }
         }
+        .onDisappear {
+            voicePlayer.stop()
+            if viewModel.isRecordingVoice {
+                viewModel.cancelVoiceRecording()
+            }
+        }
         .onChange(of: selectedPhoto) { _, newValue in
             guard let newValue else { return }
 
             Task {
                 if let data = try? await newValue.loadTransferable(type: Data.self) {
-                    cropItem = ImageCropItem(imageData: data, title: "Кадрировать фото", aspectRatio: 0.8, maxPixelSize: 1600)
+                    cropItem = ImageCropItem(imageData: data, title: "РљР°РґСЂРёСЂРѕРІР°С‚СЊ С„РѕС‚Рѕ", aspectRatio: 0.8, maxPixelSize: 1600)
                 }
                 selectedPhoto = nil
             }
@@ -188,16 +207,16 @@ struct ChatView: View {
                 }
             )
         }
-        .alert("Ошибка", isPresented: Binding(
+        .alert("РћС€РёР±РєР°", isPresented: Binding(
             get: { viewModel.errorMessage != nil || firestoreService.lastErrorMessage != nil },
             set: { if !$0 { viewModel.errorMessage = nil; firestoreService.lastErrorMessage = nil } }
         )) {
-            Button("Понятно", role: .cancel) {
+            Button("РџРѕРЅСЏС‚РЅРѕ", role: .cancel) {
                 viewModel.errorMessage = nil
                 firestoreService.lastErrorMessage = nil
             }
         } message: {
-            Text(viewModel.errorMessage ?? firestoreService.lastErrorMessage ?? "Не удалось выполнить действие.")
+            Text(viewModel.errorMessage ?? firestoreService.lastErrorMessage ?? "РќРµ СѓРґР°Р»РѕСЃСЊ РІС‹РїРѕР»РЅРёС‚СЊ РґРµР№СЃС‚РІРёРµ.")
         }
     }
 
@@ -222,28 +241,6 @@ struct ChatView: View {
         }
     }
 
-    private func playVoice(_ message: ChatMessage) {
-        guard let url = message.mediaURL else { return }
-        if playingMessageId == message.id {
-            audioPlayer?.pause()
-            audioPlayer = nil
-            playingMessageId = nil
-            return
-        }
-
-        let player = AVPlayer(url: url)
-        audioPlayer = player
-        playingMessageId = message.id
-        player.play()
-        Task { @MainActor in
-            let duration = UInt64(max(message.voiceDuration ?? 1, 1) * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: duration)
-            if playingMessageId == message.id {
-                audioPlayer = nil
-                playingMessageId = nil
-            }
-        }
-    }
 }
 
 private struct OpenedChatImage: Identifiable {
@@ -346,12 +343,12 @@ private struct MessageBubble: View {
                     }
 
                     Menu {
-                        Button("❤️") { onReact("❤️") }
-                        Button("🔥") { onReact("🔥") }
-                        Button("🥰") { onReact("🥰") }
-                        Button("✨") { onReact("✨") }
+                        Button("\u{2764}\u{FE0F}") { onReact("\u{2764}\u{FE0F}") }
+                        Button("\u{1F525}") { onReact("\u{1F525}") }
+                        Button("\u{1F970}") { onReact("\u{1F970}") }
+                        Button("\u{2728}") { onReact("\u{2728}") }
                         Divider()
-                        Button("Удалить", role: .destructive) { onDelete() }
+                        Button("РЈРґР°Р»РёС‚СЊ", role: .destructive) { onDelete() }
                     } label: {
                         Image(systemName: "face.smiling")
                             .font(.caption)
@@ -440,7 +437,7 @@ private struct MessageBubble: View {
                     .fill(.white.opacity(0.16))
                 VStack(spacing: 8) {
                     Image(systemName: "eye.slash.fill")
-                    Text("Фото уже просмотрено")
+                    Text("Р¤РѕС‚Рѕ СѓР¶Рµ РїСЂРѕСЃРјРѕС‚СЂРµРЅРѕ")
                         .font(.caption.weight(.semibold))
                 }
             } else {
@@ -460,9 +457,9 @@ private struct MessageBubble: View {
                 VStack(spacing: 8) {
                     Image(systemName: "1.circle.fill")
                         .font(.title2)
-                    Text("Один просмотр")
+                    Text("РћРґРёРЅ РїСЂРѕСЃРјРѕС‚СЂ")
                         .font(.caption.weight(.bold))
-                    Text("\(Int(message.oneTimeDuration ?? 10)) сек.")
+                    Text("\(Int(message.oneTimeDuration ?? 10)) СЃРµРє.")
                         .font(.caption2)
                 }
                 .padding(10)
@@ -486,7 +483,7 @@ private struct MessageBubble: View {
             .overlay {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
-                    Text("Фото недоступно")
+                    Text("Р¤РѕС‚Рѕ РЅРµРґРѕСЃС‚СѓРїРЅРѕ")
                         .font(.caption)
                 }
             }
@@ -513,6 +510,9 @@ private struct ChatComposer: View {
     let isSending: Bool
     let isRecordingVoice: Bool
     let sendText: () -> Void
+    let hasRetryableVoice: Bool
+    let retryVoice: () -> Void
+    let cancelRecording: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -521,10 +521,25 @@ private struct ChatComposer: View {
                     Circle()
                         .fill(.red)
                         .frame(width: 8, height: 8)
-                    Text("Идёт запись. Нажмите микрофон ещё раз, чтобы отправить.")
+                    Text("РРґС‘С‚ Р·Р°РїРёСЃСЊ. РќР°Р¶РјРёС‚Рµ РјРёРєСЂРѕС„РѕРЅ РµС‰С‘ СЂР°Р·, С‡С‚РѕР±С‹ РѕС‚РїСЂР°РІРёС‚СЊ.")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
+                    Button("Р С›РЎвЂљР СР ВµР Р…Р В°", action: cancelRecording)
+                        .font(.caption.weight(.semibold))
+                }
+            }
+
+            if hasRetryableVoice {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.bubble.fill")
+                        .foregroundStyle(.orange)
+                    Text("Р вЂњР С•Р В»Р С•РЎРѓР С•Р Р†Р С•Р Вµ Р Р…Р Вµ Р С•РЎвЂљР С—РЎР‚Р В°Р Р†Р С‘Р В»Р С•РЎРѓРЎРЉ. Р СљР С•Р В¶Р Р…Р С• Р С—Р С•Р С—РЎР‚Р С•Р В±Р С•Р Р†Р В°РЎвЂљРЎРЉ Р ВµРЎвЂ°РЎвЂ РЎР‚Р В°Р В·.")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Р СџР С•Р Р†РЎвЂљР С•РЎР‚Р С‘РЎвЂљРЎРЉ", action: retryVoice)
+                        .font(.caption.weight(.bold))
                 }
             }
 
@@ -536,9 +551,9 @@ private struct ChatComposer: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isSending || isRecordingVoice)
-                .accessibilityLabel("Выбрать фото")
+                .accessibilityLabel("Р’С‹Р±СЂР°С‚СЊ С„РѕС‚Рѕ")
 
-                TextField("Напишите нежное сообщение", text: $draft, axis: .vertical)
+                TextField("РќР°РїРёС€РёС‚Рµ РЅРµР¶РЅРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -564,12 +579,63 @@ private struct ChatComposer: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isSending)
-                .accessibilityLabel(draft.isEmpty ? "Голосовое сообщение" : "Отправить")
+                .accessibilityLabel(draft.isEmpty ? "Р“РѕР»РѕСЃРѕРІРѕРµ СЃРѕРѕР±С‰РµРЅРёРµ" : "РћС‚РїСЂР°РІРёС‚СЊ")
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+    }
+}
+
+@MainActor
+private final class VoiceMessagePlayer: ObservableObject {
+    @Published private(set) var playingMessageId: String?
+
+    private var player: AVPlayer?
+    private var finishObserver: NSObjectProtocol?
+
+    func togglePlayback(for message: ChatMessage) {
+        guard let url = message.mediaURL else { return }
+
+        if playingMessageId == message.id {
+            stop()
+            return
+        }
+
+        stop()
+
+        let item = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: item)
+        self.player = player
+        playingMessageId = message.id
+
+        finishObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stop()
+        }
+
+        player.play()
+    }
+
+    func stop() {
+        player?.pause()
+        player = nil
+        playingMessageId = nil
+
+        if let finishObserver {
+            NotificationCenter.default.removeObserver(finishObserver)
+            self.finishObserver = nil
+        }
+    }
+
+    deinit {
+        if let finishObserver {
+            NotificationCenter.default.removeObserver(finishObserver)
+        }
     }
 }
 
@@ -595,13 +661,13 @@ private struct ImagePreviewSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                         .padding(.horizontal, 16)
                     } else {
-                        EmptyStateView(title: "Фото не открылось", subtitle: "Выберите другое изображение.", systemImage: "photo")
+                        EmptyStateView(title: "Р¤РѕС‚Рѕ РЅРµ РѕС‚РєСЂС‹Р»РѕСЃСЊ", subtitle: "Р’С‹Р±РµСЂРёС‚Рµ РґСЂСѓРіРѕРµ РёР·РѕР±СЂР°Р¶РµРЅРёРµ.", systemImage: "photo")
                             .padding(16)
                     }
 
                     GlassCard {
                         VStack(alignment: .leading, spacing: 12) {
-                            Picker("Режим фото", selection: $mode) {
+                            Picker("Р РµР¶РёРј С„РѕС‚Рѕ", selection: $mode) {
                                 ForEach(ChatImageSendMode.allCases) { mode in
                                     Text(mode.title).tag(mode)
                                 }
@@ -609,14 +675,14 @@ private struct ImagePreviewSheet: View {
                             .pickerStyle(.segmented)
 
                             if mode == .oneTime {
-                                Picker("Время просмотра", selection: $oneTimeDuration) {
-                                    Text("5 сек").tag(TimeInterval(5))
-                                    Text("10 сек").tag(TimeInterval(10))
-                                    Text("15 сек").tag(TimeInterval(15))
+                                Picker("Р’СЂРµРјСЏ РїСЂРѕСЃРјРѕС‚СЂР°", selection: $oneTimeDuration) {
+                                    Text("5 СЃРµРє").tag(TimeInterval(5))
+                                    Text("10 СЃРµРє").tag(TimeInterval(10))
+                                    Text("15 СЃРµРє").tag(TimeInterval(15))
                                 }
                                 .pickerStyle(.segmented)
 
-                                Text("Фото будет заблюрено в чате и откроется только один раз.")
+                                Text("Р¤РѕС‚Рѕ Р±СѓРґРµС‚ Р·Р°Р±Р»СЋСЂРµРЅРѕ РІ С‡Р°С‚Рµ Рё РѕС‚РєСЂРѕРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РѕРґРёРЅ СЂР°Р·.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -624,18 +690,18 @@ private struct ImagePreviewSheet: View {
                     }
                     .padding(.horizontal, 16)
 
-                    PrimaryActionButton(title: "Отправить фото", systemImage: "paperplane.fill", isLoading: isSending, action: send)
+                    PrimaryActionButton(title: "РћС‚РїСЂР°РІРёС‚СЊ С„РѕС‚Рѕ", systemImage: "paperplane.fill", isLoading: isSending, action: send)
                         .padding(.horizontal, 16)
 
                     Spacer()
                 }
                 .padding(.top, 16)
             }
-            .navigationTitle("Предпросмотр")
+            .navigationTitle("РџСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Отмена", action: cancel)
+                    Button("РћС‚РјРµРЅР°", action: cancel)
                 }
             }
         }
@@ -650,8 +716,8 @@ private enum ChatImageSendMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .normal: "Обычное"
-        case .oneTime: "Один раз"
+        case .normal: "РћР±С‹С‡РЅРѕРµ"
+        case .oneTime: "РћРґРёРЅ СЂР°Р·"
         }
     }
 }
@@ -672,7 +738,7 @@ private struct FullScreenPhotoView: View {
                         .scaledToFit()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 case .failure:
-                    EmptyStateView(title: "Фото недоступно", subtitle: "Проверьте сервер и подключение.", systemImage: "photo")
+                    EmptyStateView(title: "Р¤РѕС‚Рѕ РЅРµРґРѕСЃС‚СѓРїРЅРѕ", subtitle: "РџСЂРѕРІРµСЂСЊС‚Рµ СЃРµСЂРІРµСЂ Рё РїРѕРґРєР»СЋС‡РµРЅРёРµ.", systemImage: "photo")
                         .padding(24)
                 default:
                     ProgressView()
@@ -718,7 +784,7 @@ private struct OneTimePhotoView: View {
                 VStack(spacing: 14) {
                     Image(systemName: "eye.slash.fill")
                         .font(.system(size: 52))
-                    Text("Фото скрыто во время записи экрана")
+                    Text("Р¤РѕС‚Рѕ СЃРєСЂС‹С‚Рѕ РІРѕ РІСЂРµРјСЏ Р·Р°РїРёСЃРё СЌРєСЂР°РЅР°")
                         .font(.headline)
                 }
                 .foregroundStyle(.white)
@@ -732,7 +798,7 @@ private struct OneTimePhotoView: View {
                             .scaledToFit()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     case .failure:
-                        EmptyStateView(title: "Фото недоступно", subtitle: "Проверьте сервер и подключение.", systemImage: "photo")
+                        EmptyStateView(title: "Р¤РѕС‚Рѕ РЅРµРґРѕСЃС‚СѓРїРЅРѕ", subtitle: "РџСЂРѕРІРµСЂСЊС‚Рµ СЃРµСЂРІРµСЂ Рё РїРѕРґРєР»СЋС‡РµРЅРёРµ.", systemImage: "photo")
                             .padding(24)
                     default:
                         ProgressView()
@@ -742,7 +808,7 @@ private struct OneTimePhotoView: View {
             }
 
             HStack(spacing: 12) {
-                Label("\(secondsLeft) сек.", systemImage: "timer")
+                Label("\(secondsLeft) СЃРµРє.", systemImage: "timer")
                     .font(.headline)
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)

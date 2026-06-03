@@ -10,6 +10,7 @@ final class ChatViewModel: ObservableObject {
     @Published var isSending = false
     @Published var isUploadingImage = false
     @Published var isRecordingVoice = false
+    @Published var retryableVoiceRecording: VoiceRecording?
     @Published var errorMessage: String?
     private let voiceRecorder = VoiceRecorder()
 
@@ -34,15 +35,16 @@ final class ChatViewModel: ObservableObject {
                 let recording = try voiceRecorder.stop()
                 isRecordingVoice = false
                 isSending = true
-                let didSend = await service.sendVoiceData(
-                    recording.data,
-                    duration: recording.duration,
+                let didSend = await sendVoiceRecording(
+                    recording,
+                    using: service,
                     storageService: storageService,
                     coupleId: coupleId,
                     authorId: authorId
                 )
                 isSending = false
                 if !didSend {
+                    retryableVoiceRecording = recording
                     errorMessage = service.lastErrorMessage ?? "Голосовое не отправилось."
                 }
             } catch {
@@ -53,6 +55,7 @@ final class ChatViewModel: ObservableObject {
         } else {
             do {
                 try await voiceRecorder.start()
+                retryableVoiceRecording = nil
                 isRecordingVoice = true
             } catch {
                 errorMessage = "Разрешите доступ к микрофону в настройках iPhone."
@@ -63,6 +66,30 @@ final class ChatViewModel: ObservableObject {
     func cancelVoiceRecording() {
         voiceRecorder.cancel()
         isRecordingVoice = false
+    }
+
+    func retryVoiceMessage(
+        using service: FirestoreService,
+        storageService: StorageService,
+        coupleId: String,
+        authorId: String
+    ) async {
+        guard let retryableVoiceRecording else { return }
+        isSending = true
+        let didSend = await sendVoiceRecording(
+            retryableVoiceRecording,
+            using: service,
+            storageService: storageService,
+            coupleId: coupleId,
+            authorId: authorId
+        )
+        isSending = false
+
+        if didSend {
+            self.retryableVoiceRecording = nil
+        } else {
+            errorMessage = service.lastErrorMessage ?? "Р“РѕР»РѕСЃРѕРІРѕРµ РЅРµ РѕС‚РїСЂР°РІРёР»РѕСЃСЊ."
+        }
     }
 
     func sendImage(
@@ -116,5 +143,21 @@ final class ChatViewModel: ObservableObject {
         }
 
         return resized.jpegData(compressionQuality: 0.78)
+    }
+
+    private func sendVoiceRecording(
+        _ recording: VoiceRecording,
+        using service: FirestoreService,
+        storageService: StorageService,
+        coupleId: String,
+        authorId: String
+    ) async -> Bool {
+        await service.sendVoiceData(
+            recording.data,
+            duration: recording.duration,
+            storageService: storageService,
+            coupleId: coupleId,
+            authorId: authorId
+        )
     }
 }

@@ -57,6 +57,7 @@ struct MemoriesView: View {
 
 private struct MemoryMapCard: View {
     let memories: [Memory]
+    @State private var position: MapCameraPosition = .automatic
 
     private var pinnedMemories: [Memory] {
         memories.filter { $0.coordinate != nil }
@@ -74,21 +75,42 @@ private struct MemoryMapCard: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Map(initialPosition: .region(MKCoordinateRegion(
-                    center: pinnedMemories.first?.coordinate ?? CLLocationCoordinate2D(latitude: 55.7558, longitude: 37.6173),
-                    span: MKCoordinateSpan(latitudeDelta: 8, longitudeDelta: 8)
-                ))) {
-                    ForEach(pinnedMemories) { memory in
-                        if let coordinate = memory.coordinate {
-                            Marker(memory.title, coordinate: coordinate)
-                                .tint(.pink)
+                if pinnedMemories.isEmpty {
+                    EmptyStateView(
+                        title: "РџРѕРєР° РЅРµС‚ С‚РѕС‡РµРє РЅР° РєР°СЂС‚Рµ",
+                        subtitle: "Р”РѕР±Р°РІСЊС‚Рµ РјРµСЃС‚Рѕ РІ РІРѕСЃРїРѕРјРёРЅР°РЅРёРё, Рё HeartLink РїРѕРїС‹С‚Р°РµС‚СЃСЏ РїРѕСЃС‚Р°РІРёС‚СЊ РјРµС‚РєСѓ.",
+                        systemImage: "map"
+                    )
+                } else {
+                    Map(position: $position) {
+                        ForEach(pinnedMemories) { memory in
+                            if let coordinate = memory.coordinate {
+                                Marker(memory.title, coordinate: coordinate)
+                                    .tint(.pink)
+                            }
                         }
+                    }
+                    .onAppear(perform: updateCamera)
+                    .onChange(of: pinnedMemories.map(\.id)) { _, _ in
+                        updateCamera()
                     }
                 }
                 .frame(height: 190)
                 .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             }
         }
+    }
+
+    private func updateCamera() {
+        guard !pinnedMemories.isEmpty else {
+            position = .region(MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 55.7558, longitude: 37.6173),
+                span: MKCoordinateSpan(latitudeDelta: 8, longitudeDelta: 8)
+            ))
+            return
+        }
+
+        position = .rect(pinnedMemories.mapRect.insetBy(dx: -12000, dy: -12000))
     }
 }
 
@@ -165,6 +187,10 @@ struct MemoryDetailView: View {
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
+
+                        if let coordinate = memory.coordinate {
+                            MemoryLocationCard(memory: memory, coordinate: coordinate)
+                        }
                     }
                     .padding(16)
                 }
@@ -223,9 +249,7 @@ private struct MemoryThumbnail: View {
             case .success(let image):
                 image
                     .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.regularMaterial)
+                    .scaledToFill()
             default:
                 LinearGradient(colors: [.pink.opacity(0.75), .purple.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay {
@@ -235,6 +259,9 @@ private struct MemoryThumbnail: View {
                     }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.regularMaterial)
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
@@ -248,19 +275,61 @@ private struct MemoryHeroImage: View {
             case .success(let image):
                 image
                     .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.regularMaterial)
+                    .scaledToFill()
             default:
                 LinearGradient(colors: [.pink, .purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .overlay {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 76))
                             .foregroundStyle(.white.opacity(0.9))
-                    }
+                }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.regularMaterial)
+        .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+    }
+}
+
+private struct MemoryLocationCard: View {
+    let memory: Memory
+    let coordinate: CLLocationCoordinate2D
+
+    var body: some View {
+        GlassCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("РњРµСЃС‚Рѕ РЅР° РєР°СЂС‚Рµ", systemImage: "map")
+                        .font(.headline)
+                    Spacer()
+                    Button("Apple Maps") {
+                        openInMaps()
+                    }
+                    .font(.caption.weight(.bold))
+                }
+
+                Map(initialPosition: .region(MKCoordinateRegion(
+                    center: coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+                ))) {
+                    Marker(memory.title, coordinate: coordinate)
+                        .tint(.pink)
+                }
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+
+                Text(memory.locationName)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func openInMaps() {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        item.name = memory.locationName
+        item.openInMaps()
     }
 }
 
@@ -499,6 +568,27 @@ private extension View {
         padding(.horizontal, 14)
             .padding(.vertical, 13)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private extension Array where Element == Memory {
+    var mapRect: MKMapRect {
+        let coordinates = compactMap(\.coordinate)
+        guard let first = coordinates.first else { return .world }
+
+        return coordinates.dropFirst().reduce(
+            MKMapRect(
+                origin: MKMapPoint(first),
+                size: MKMapSize(width: 0, height: 0)
+            )
+        ) { partial, coordinate in
+            partial.union(
+                MKMapRect(
+                    origin: MKMapPoint(coordinate),
+                    size: MKMapSize(width: 0, height: 0)
+                )
+            )
+        }
     }
 }
 
